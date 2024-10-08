@@ -14,7 +14,7 @@ int main(int argc, char** argv) {
   int ret = connect(fd, (struct sockaddr*)&server_addr, sizeof(server_addr));
   print_error(ret, "Server connected");
 
-  char message[10];
+  char message[256];
 
   bool identification = true;
 
