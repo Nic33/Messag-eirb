@@ -9,6 +9,7 @@
 #include <string.h>
 
 #define MAX_FDS 3
+#define USER_FILE "user.txt"
 //#define MAX_USERS 3
 
 typedef struct {
@@ -27,6 +28,47 @@ void print_error(int fd, char *s){
         perror(s);
         exit(EXIT_FAILURE);
     }
+}
+
+void add_user_to_file(const char *prenom, const char *nom, const char *password) {
+  FILE *file = fopen(USER_FILE, "a"); 
+  if (file == NULL) {
+      perror("Erreur lors de l'ouverture du fichier");
+      return;
+  }
+
+  fprintf(file, "%s;%s;%s\n", prenom, nom, password);
+  fclose(file);
+}
+
+int verify_user_in_file(const char *prenom, const char *nom, const char *password) {
+  FILE *file = fopen(USER_FILE, "r"); 
+  if (file == NULL) {
+    perror("Erreur lors de l'ouverture du fichier");
+    return 0;
+  }
+
+  char line[256];
+  char user_entry[256] = "";  
+
+  strcat(user_entry, prenom);
+  strcat(user_entry, ";");
+  strcat(user_entry, nom);
+  strcat(user_entry, ";");
+  strcat(user_entry, password);
+
+  while (fgets(line, sizeof(line), file)) {
+    size_t len = strlen(line);
+    if (len > 0 && line[len - 1] == '\n') {
+      line[len - 1] = '\0';
+    }
+    if (strcmp(line, user_entry) == 0) {
+      fclose(file);
+      return 1;  
+    }
+  }
+  fclose(file);
+  return 0; 
 }
 
 void associer_utilisateur_a_socket(int socket_fd) {
@@ -59,6 +101,26 @@ void envoyer_message_a_utilisateur(char *prenom, char *message) {
         }
     }
 }
+void write_int_as_message(int fd, int val) {
+  int size = sizeof(val);
+  int send = 0;
+  
+  while (send < size) {
+    int temp_send = write(fd, ((char*)&val) + send, size - send);
+    print_error(temp_send, "write_int");
+    send += temp_send;
+  }
+}
+void write_on_socket(int fd, char* s) {
+  int size = strlen(s);
+  int send = 0;
+
+  while (send < size) {
+    int temp_send = write(fd, s + send, size - send);
+    print_error(temp_send, "write");
+    send += temp_send;
+  }
+}
 
 int main(int argc, char const *argv[]){
     //CREATE socket()
@@ -69,7 +131,7 @@ int main(int argc, char const *argv[]){
     //DEFINE Server address
     struct sockaddr_in server_addr;
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(8080);
+    server_addr.sin_port = htons(8081);
     inet_aton("127.0.0.1", &server_addr.sin_addr);
 
     //bind()
@@ -129,7 +191,9 @@ int main(int argc, char const *argv[]){
             }
 
             //Si un client à des données à lire
-            if(fds[i].fd != -1 && fds[i].fd != welcome_fd && (fds[i].revents & POLLIN)){
+            if(fds[i].fd != -1 && fds[i].fd != welcome_fd && (fds[i].revents & POLLIN) == POLLIN){
+
+                int client_fd = fds[i].fd;
                 //printf("En attente de données");
                 char buffer[1024];
                 memset(buffer, 0, sizeof(buffer));
@@ -139,16 +203,71 @@ int main(int argc, char const *argv[]){
                     // Chercher le séparateur '\x02' dans le buffer
                     char *separator = strchr(buffer, '\x02');
                     if (separator != NULL) {
-                    *separator = '\0';  // Remplace le séparateur par une fin de chaîne pour séparer
-                    char *prenom = buffer;  // Prénom est avant le séparateur
-                    char *message = separator + 1;  // Message est après le séparateur
+                        *separator = '\0';  // Remplace le séparateur par une fin de chaîne pour séparer
+                        char *destinataire = buffer;  // Prénom est avant le séparateur
+                        char *message = separator + 1;  // Message est après le séparateur
 
-                    // Affichage du prénom et du message
-                    printf("Received data from fd %d:\n", fds[i].fd);
-                    printf("Destinataire: %s, Message: %s\n", prenom, message);
-                    
-                    // Ecrire le message sur la socket du client 
-                    envoyer_message_a_utilisateur(prenom, message);
+                        // Affichage du prénom et du message
+                        printf("Received data from fd %d:\n", fds[i].fd);
+                        printf("Destinataire: %s, Message: %s\n", destinataire, message);
+                        
+                        char *token = strtok(buffer, ":");
+                        if (token != NULL) {
+                            if (strcmp(token, "new") == 0) {
+                                token = strtok(NULL, ";");
+                                char *prenom = token;
+                                token = strtok(NULL, ";");
+                                char *nom = token;
+                                token = strtok(NULL, ";");
+                                char *password = token;
+
+                                if (prenom && nom && password) {
+                                    add_user_to_file(prenom, nom, password);
+                                    printf("Nouvel utilisateur ajouté : %s %s\n", prenom, nom);
+
+                                    char message[] = "Utilisateur ajouté avec succès.\n";
+                                    write_int_as_message(client_fd, strlen(message));
+                                    write_on_socket(client_fd, message);
+                                }
+                            }
+                            else if (strcmp(token, "connect") == 0) {
+                                token = strtok(NULL, ";");
+                                char *prenom = token;
+                                token = strtok(NULL, ";");
+                                char *nom = token;
+                                token = strtok(NULL, ";");
+                                char *password = token;
+
+                                if (prenom && nom && password) {
+                                int user_found = verify_user_in_file(prenom, nom, password);
+                                if (user_found) {
+                                    char message[] = "Connexion réussie.\n";
+                                    write_int_as_message(client_fd, strlen(message));
+                                    write_on_socket(client_fd, message);
+                                    printf("Connexion réussie pour : %s %s\n", prenom, nom);
+                                } else {
+                                    char message[] = "Connexion refusée.\n";
+                                    write_int_as_message(client_fd, strlen(message));
+                                    write_on_socket(client_fd, message);
+                                    printf("Connexion refusée pour : %s %s\n", prenom, nom);
+                                }
+                                }
+                            }
+                            else if (strcmp(token, "message") == 0) {
+
+                                char new_message[1024];
+                                strcpy(new_message, &token[8]);
+                                printf("Message du client : %s\n", new_message);
+                                envoyer_message_a_utilisateur(destinataire, message);
+                            }
+                            else {
+                                printf("Type de requête inconnu : %s\n", token);
+                                envoyer_message_a_utilisateur(destinataire, "Requête inconnue.\n");
+                            }
+                        }
+
+                        free(buffer);
+                        // Ecrire le message sur la socket du client 
                     } 
                 }
             }

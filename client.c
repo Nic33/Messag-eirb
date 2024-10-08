@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stdio.h>
 #include <poll.h>
 #include <sys/socket.h>
@@ -83,6 +84,55 @@ void read_from_socket(int fd) {
     }
 }
 
+int read_int_from_socket(int fd) {
+  int val;
+  int total_bytes_read = 0;
+  int bytes_read;
+  int size = sizeof(val);
+
+  while (total_bytes_read < size) {
+    bytes_read = read(fd, ((char*)&val) + total_bytes_read, size - total_bytes_read);
+    if (bytes_read == 0) {
+      return 0;
+    }
+    print_error(bytes_read, "read_int");
+    total_bytes_read += bytes_read;
+  }
+  
+  return val;
+}
+
+int read_message_from_socket(int fd, char* buffer, int size) {
+  int total_bytes_read = 0;
+  int bytes_read;
+
+  while (total_bytes_read < size) {
+
+    printf("total_bytes_read %d\n", total_bytes_read);
+    printf("size %d\n", size);
+
+    bytes_read = read(fd, buffer + total_bytes_read, size - total_bytes_read);
+
+    if (bytes_read == 0) {
+      return 0;
+    }
+    print_error(bytes_read, "read_message");
+    total_bytes_read += bytes_read;
+  }
+  return total_bytes_read;
+}
+
+void write_int_as_message(int fd, int val) {
+  int size = sizeof(val);
+  int send = 0;
+  
+  while (send < size) {
+    int temp_send = write(fd, ((char*)&val) + send, size - send);
+    print_error(temp_send, "write_int");
+    send += temp_send;
+  }
+}
+
 int main(int argc, char const *argv[]) {
     // Création de la socket (domaine AF_INET, type SOCK_STREAM, protocole 0)
     int fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -91,24 +141,15 @@ int main(int argc, char const *argv[]) {
     // Définition de l'adresse du serveur (côté client)
     struct sockaddr_in server_addr;
     server_addr.sin_family = AF_INET;          // Protocole IPv4
-    server_addr.sin_port = htons(8080);        // Numéro de port (converti en format réseau)
+    server_addr.sin_port = htons(8081);        // Numéro de port (converti en format réseau)
     inet_aton("127.0.0.1", &server_addr.sin_addr);  // Adresse IP du serveur (localhost)
 
     // Connexion au serveur
     int ret = connect(fd, (struct sockaddr *)&server_addr, sizeof(server_addr));
     print_error(ret, "connect");  // Vérifie si la connexion a été établie avec succès
 
-    char prenom[BUFFER_SIZE];
-    // Lecture du prénom de l'utilisateur
-    printf("Enter your name: ");
-    fgets(prenom, BUFFER_SIZE, stdin);  // Lit le prénom de l'utilisateur
-
-    // Suppression du caractère de nouvelle ligne '\n' ajouté par fgets()
-    size_t prenom_len = strlen(prenom);
-    if (prenom[prenom_len - 1] == '\n') {
-        prenom[prenom_len - 1] = '\0';  // Remplace le '\n' par '\0' (fin de chaîne)
-        prenom_len--;  // Ajuste la longueur du prénom
-    }
+    char message[256];
+    int identification = 0;
 
     // Configuration de poll pour surveiller à la fois stdin et la socket
     struct pollfd fds[2];
@@ -117,41 +158,226 @@ int main(int argc, char const *argv[]) {
     fds[1].fd = fd;  // La socket du serveur
     fds[1].events = POLLIN;
 
+    char prenom[256];
+
     while (1) {
-        int poll_count = poll(fds, 2, -1);
-        if (poll_count > 0) {
-            // Si des données sont disponibles sur stdin
-            if (fds[0].revents & POLLIN) {
-                // Buffer pour stocker le message à envoyer
-                char buffer[BUFFER_SIZE];
-                char message[BUFFER_SIZE + BUFFER_SIZE];  // Pour stocker [prenom][séparateur][message]
 
-                // Lire le message depuis le terminal
-                printf("\nEnter the message to send (type 'exit' to quit): ");
-                fgets(buffer, BUFFER_SIZE, stdin);  // Lit un message de l'utilisateur
+        if(identification == 0){
+            printf("Exit tape 'quit'\n");
+            printf("Identification tape '1'\n");
+            printf("New user tape '2'\n");
 
-                // Suppression du caractère de nouvelle ligne '\n' ajouté par fgets()
-                size_t message_len = strlen(buffer);
-                if (buffer[message_len - 1] == '\n') {
-                    buffer[message_len - 1] = '\0';  // Remplace le \n par \0 (fin de chaîne)
-                    message_len--;  // Ajuste la longueur du message
-                }
-                // Vérifie si l'utilisateur veut quitter le programme
-                if (strcmp(buffer, "exit") == 0) {
-                    printf("Exiting client...\n");
-                    break;  // Sort de la boucle et termine le programme
-                }
-                
-                // Formatage du message à envoyer : [prenom][séparateur][message]
-                snprintf(message, sizeof(message), "%s\x02%s", prenom, buffer);
-                write_on_socket(fd, message);
+            fgets(message, sizeof(message), stdin);
+            size_t len = strlen(message);
+            if (len > 0 && message[len - 1] == '\n') {
+                message[len - 1] = '\0';
+                len--;
             }
+            if (strcmp(message, "quit") == 0) {
+                printf("Exiting...\n");
+                break;
 
-            // Si des données sont disponibles sur la socket
-            if (fds[1].revents & POLLIN) {
-                read_from_socket(fd);  // Appel de la fonction pour lire les données
+            }else if (strcmp(message, "1") == 0) {
+
+                char user_info[256] = "connect:";   
+                char input[256];
+
+                printf("Prénom : \n");
+                fgets(input, sizeof(input), stdin);
+
+                size_t len = strlen(input);
+                if (len > 0 && input[len - 1] == '\n') {
+                    input[len - 1] = '\0';
+                }
+
+                strcat(user_info, input);
+                strcat(user_info, ";");  
+
+                printf("Nom : \n");
+                fgets(input, sizeof(input), stdin);
+
+                len = strlen(input);
+                if (len > 0 && input[len - 1] == '\n') {
+                    input[len - 1] = '\0';
+                }
+
+                strcat(user_info, input);
+                strcat(user_info, ";");
+
+                printf("Mot de passe : \n");
+                fgets(input, sizeof(input), stdin);
+
+                len = strlen(input);
+                if (len > 0 && input[len - 1] == '\n') {
+                    input[len - 1] = '\0';
+                }
+
+                strcat(user_info, input);
+                len = strlen(user_info);
+                if (len > 0 && input[len - 1] == '\n') {
+                    input[len - 1] = '\0';
+                }
+
+                printf("Value sent : %s\n", user_info);
+
+                write_int_as_message(fd, len);
+                write_on_socket(fd, user_info);
+                printf("Message sent\n");
+                
+                int message_size = read_int_from_socket(fd);
+                printf("Message size received: %d\n", message_size);
+
+                if (message_size <= 0 || message_size >= 1024) {
+                    printf("Invalid message size: %d\n", message_size);
+                    break;
+                }
+
+                char* buffer = (char*)malloc(message_size + 1);
+                int read_status = read_message_from_socket(fd, buffer, message_size);
+                if (read_status <= 0) {
+                    printf("Server disconnected or error occurred.\n");
+                    free(buffer);
+                    break;
+                }
+
+                buffer[message_size - 1] = '\0'; 
+                printf("Message received from server: %s\n", buffer);
+
+                if (strcmp(buffer, "Connexion réussie.") == 0) {
+                    identification = 1;
+                }
+
+                free(buffer);
+            
+            }else if (strcmp(message, "2") == 0) {
+
+                char user_info[256] = "new:";   
+                char input[256];
+
+                printf("Prénom : \n");
+                fgets(input, sizeof(input), stdin);
+
+                size_t len = strlen(input);
+                if (len > 0 && input[len - 1] == '\n') {
+                    input[len - 1] = '\0';
+                }
+
+                strcat(user_info, input);
+                strcat(user_info, ";");  
+
+                printf("Nom : \n");
+                fgets(input, sizeof(input), stdin);
+
+                len = strlen(input);
+                if (len > 0 && input[len - 1] == '\n') {
+                    input[len - 1] = '\0';
+                }
+
+                strcat(user_info, input);
+                strcat(user_info, ";");
+
+                printf("Mot de passe : \n");
+                fgets(input, sizeof(input), stdin);
+
+                len = strlen(input);
+                if (len > 0 && input[len - 1] == '\n') {
+                    input[len - 1] = '\0';
+                }
+
+                strcat(user_info, input);
+                len = strlen(user_info);
+                if (len > 0 && input[len - 1] == '\n') {
+                    input[len - 1] = '\0';
+                }
+                printf("Value sent : %s\n", user_info);
+
+                write_int_as_message(fd, len);
+                write_on_socket(fd, user_info);
+                printf("Message sent\n");
+                
+                int message_size = read_int_from_socket(fd);
+                printf("Message size received: %d\n", message_size);
+
+                if (message_size <= 0 || message_size >= 1024) {
+                    printf("Invalid message size: %d\n", message_size);
+                    break;
+                }
+
+                char* buffer = (char*)malloc(message_size + 1);
+                int read_status = read_message_from_socket(fd, buffer, message_size);
+                if (read_status <= 0) {
+                    printf("Server disconnected or error occurred.\n");
+                    free(buffer);
+                    break;
+                }
+
+                buffer[message_size] = '\0'; 
+                printf("Message received from server: %s\n", buffer);
+
+                free(buffer);
+                
+            }else{
+                printf("I don't understand\n");
             }
         }
+        else if (identification == 1){
+            
+            // Lecture du prénom de l'utilisateur
+            printf("Exit tape 'quit'\n");
+            printf("Enter a destinataire: ");
+            fgets(prenom, 256, stdin);  // Lit le prénom de l'utilisateur
+
+            // Suppression du caractère de nouvelle ligne '\n' ajouté par fgets()
+            size_t prenom_len = strlen(prenom);
+            if (prenom[prenom_len - 1] == '\n') {
+                prenom[prenom_len - 1] = '\0';  // Remplace le '\n' par '\0' (fin de chaîne)
+                prenom_len--;  // Ajuste la longueur du prénom
+            }
+
+            if (strcmp(prenom, "exit") == 0) {
+                        printf("Exiting client...\n");
+                        break;  // Sort de la boucle et termine le programme
+            }
+            identification = 2;
+        }
+        else if(identification == 2){
+            int poll_count = poll(fds, 2, -1);
+            if (poll_count > 0) {
+                // Si des données sont disponibles sur stdin
+                if (fds[0].revents & POLLIN) {
+                    // Buffer pour stocker le message à envoyer
+                    char buffer[BUFFER_SIZE];
+                    char message[BUFFER_SIZE + BUFFER_SIZE];  // Pour stocker [prenom][séparateur][message]
+
+                    // Lire le message depuis le terminal
+                    printf("\nEnter the message to send (type 'exit' to go back to menu):\n");
+                    fgets(buffer, BUFFER_SIZE, stdin);  // Lit un message de l'utilisateur
+
+                    // Suppression du caractère de nouvelle ligne '\n' ajouté par fgets()
+                    size_t message_len = strlen(buffer);
+                    if (buffer[message_len - 1] == '\n') {
+                        buffer[message_len - 1] = '\0';  // Remplace le \n par \0 (fin de chaîne)
+                        message_len--;  // Ajuste la longueur du message
+                    }
+                    // Vérifie si l'utilisateur veut quitter le programme
+                    if (strcmp(buffer, "exit") == 0) {
+                        printf("Exiting client...\n");
+                        identification = 1;  // Sort de la boucle et termine le programme
+                    }
+                    
+                    // Formatage du message à envoyer : [prenom][séparateur][message]
+                    snprintf(message, sizeof(message), "%s\x02%s", prenom, buffer);
+                    write_on_socket(fd, message);
+                }
+
+                // Si des données sont disponibles sur la socket
+                if (fds[1].revents & POLLIN) {
+                    read_from_socket(fd);  // Appel de la fonction pour lire les données
+                }
+            }
+        }
+
+        
     }
 
     close(fd);  // Fermer la socket lorsque le programme se termine
