@@ -9,16 +9,19 @@ all : client server
 bin:
 	mkdir -p bin
 
-bin/client.o : client.c | bin
+bin/aux.o : aux.c aux.h | bin
 	$(CC) $(CFLAGS) -c $< -o $@
 
-bin/server.o : server.c | bin
+bin/client.o : client.c aux.h | bin
 	$(CC) $(CFLAGS) -c $< -o $@
 
-client : bin/client.o 
+bin/server.o : server.c aux.h | bin
+	$(CC) $(CFLAGS) -c $< -o $@
+
+client : bin/client.o bin/aux.o
 	$(CC) $^ -o $@ $(LDFLAGS)
 
-server : bin/server.o
+server : bin/server.o bin/aux.o
 	$(CC) $^ -o $@ $(LDFLAGS)
 
 clean : 
