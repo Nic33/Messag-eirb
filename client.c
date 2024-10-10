@@ -4,27 +4,23 @@
 
 
 int main(int argc, char const *argv[]) {
-    // Création de la socket (domaine AF_INET, type SOCK_STREAM, protocole 0)
     int client_fd = socket(AF_INET, SOCK_STREAM, 0);
-    print_error(client_fd, "socket");  // Vérifie si la socket a été créée avec succès
+    print_error(client_fd, "socket"); 
 
-    // Définition de l'adresse du serveur (côté client)
     struct sockaddr_in server_addr;
-    server_addr.sin_family = AF_INET;          // Protocole IPv4
-    server_addr.sin_port = htons(PORT);        // Numéro de port (converti en format réseau)
-    inet_aton(ADDRESS, &server_addr.sin_addr);  // Adresse IP du serveur (localhost)
+    server_addr.sin_family = AF_INET;  
+    server_addr.sin_port = htons(PORT);     
+    inet_aton(ADDRESS, &server_addr.sin_addr);
 
-    // Connexion au serveur
     int ret = connect(client_fd, (struct sockaddr *)&server_addr, sizeof(server_addr));
     print_error(ret, "connect");  
 
     int identification = 0;
 
-    // Configuration de poll pour surveiller à la fois stdin et la socket
     struct pollfd fds[2];
-    fds[0].fd = 0;  // 0 est stdin (entrée utilisateur)
+    fds[0].fd = 0;
     fds[0].events = POLLIN;
-    fds[1].fd = client_fd;  // La socket du serveur
+    fds[1].fd = client_fd;
     fds[1].events = POLLIN;
 
     Utilisateur user;
@@ -34,7 +30,6 @@ int main(int argc, char const *argv[]) {
     user.type = malloc(20 * sizeof(char));
     user.message = malloc(256 * sizeof(char));
     user.dest = malloc(50 * sizeof(char));
-
 
     char input[256];
 
@@ -89,9 +84,8 @@ int main(int argc, char const *argv[]) {
                 size_t lengths[] = {strlen(user.prenom) + 1, strlen(user.nom) + 1, strlen(user.mdp) + 1, 
                     strlen(user.type) + 1, strlen(user.message) + 1, strlen(user.dest) + 1};
 
-                // Envoi des longueurs
                 write(client_fd, lengths, sizeof(lengths));
-                // Envoi des chaînes de caractères
+
                 write(client_fd, user.prenom, lengths[0]);
                 write(client_fd, user.nom, lengths[1]);
                 write(client_fd, user.mdp, lengths[2]);
@@ -248,6 +242,6 @@ int main(int argc, char const *argv[]) {
         }
     }
 
-    close(client_fd);  // Fermer la socket lorsque le programme se termine
+    close(client_fd);  
     return 0;
 }
