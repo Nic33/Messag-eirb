@@ -98,8 +98,8 @@ int main(int argc, char const *argv[]) {
                 write(client_fd, user.message, lengths[4]);
                 write(client_fd, user.dest, lengths[5]);
               
-                char buffer[256];
-                ssize_t bytes_received = read(client_fd, buffer, sizeof(buffer) - 1);
+                char buffer[1024];
+                ssize_t bytes_received = read(client_fd, buffer, sizeof(buffer));
                 if (bytes_received < 0) {
                     perror("Erreur lors de la lecture de la réponse");
                     close(client_fd);
@@ -111,22 +111,21 @@ int main(int argc, char const *argv[]) {
 
                 if (strcmp(buffer, "Connexion réussie") == 0) {
                     printf("Bienvenue %s !\n", user.prenom);
-                    fflush(stdout);
 
-                    //users available
-                    bytes_received = read(client_fd, buffer, sizeof(buffer) - 1);
+                    bytes_received = read(client_fd, buffer, sizeof(buffer));
                     if (bytes_received < 0) {
                         perror("Erreur lors de la lecture de la réponse");
                         close(client_fd);
                         exit(EXIT_FAILURE);
                     }
                     buffer[bytes_received] = '\0';
-                    printf("%s\n", buffer);
+                    printf("Information : %s\n", buffer);
+                    fflush(stdout);
 
                     //servers available
 
-
                     identification = 1;
+
                 } else if (strcmp(buffer, "Connexion échouée") == 0) {
                     printf("Connexion échouée : Identifiants incorrects.\n");
                 } else {
@@ -377,7 +376,7 @@ int main(int argc, char const *argv[]) {
                 else if (fds[1].revents & POLLIN) {
                     char message[256];
 
-                    ssize_t message_bytes = read(fds[1].fd, message, sizeof(message) - 1);
+                    ssize_t message_bytes = read(fds[1].fd, message, sizeof(message));
                     if (message_bytes <= 0) {
                         printf("La personne s'est déconnecté\n");
                         identification = 1;
@@ -465,7 +464,7 @@ int main(int argc, char const *argv[]) {
                 else if (fds[1].revents & POLLIN) {
                     char message[256];
 
-                    ssize_t message_bytes = read(fds[1].fd, message, sizeof(message) - 1);
+                    ssize_t message_bytes = read(fds[1].fd, message, sizeof(message));
                     if (message_bytes <= 0) {
                         printf("La personne s'est déconnecté\n");
                         identification = 1;

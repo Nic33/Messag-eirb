@@ -87,7 +87,7 @@ void envoyer_message_a_utilisateur(Utilisateur* users, Utilisateur* user) {
   for (int i = 0; i < MAX_FDS; i++) {
     if (users[i].socket_fd != -1 && strcmp(users[i].prenom, user->dest) == 0) {
       printf("Socket trouvée pour l'utilisateur %s, socket_fd: %d\n", users[i].prenom, users[i].socket_fd);
-      int ret = write(users[i].socket_fd, buffer, strlen(buffer) + 1);
+      int ret = write(users[i].socket_fd, buffer, strlen(buffer));
 
       print_error(ret, "write");
       if (ret > 0) {
@@ -110,7 +110,7 @@ void envoyer_message_a_tous_les_utilisateurs(Utilisateur* users, int except_sock
   for (int i = 0; i < MAX_FDS; i++) {
     if (users[i].socket_fd != -1 && users[i].socket_fd != except_socket_fd) {
       printf("Envoi du message à l'utilisateur %s sur la socket %d\n", users[i].prenom, users[i].socket_fd);
-      int ret = write(users[i].socket_fd, message, strlen(message) + 1);
+      int ret = write(users[i].socket_fd, message, strlen(message) - 1);
       if (ret < 0) {
         perror("Erreur lors de l'envoi du message");
       }
@@ -148,7 +148,7 @@ void afficher_utilisateurs_connectes(Utilisateur* users, int socket_fd, char *pr
     strcat(notification, "Une erreur est survenue\n");
   }
   strcat(notification, "*************\n");
-  int ret = write(socket_fd, notification, strlen(notification) + 1);
+  int ret = write(socket_fd, notification, strlen(notification));
   if (ret < 0) {
     perror("Erreur lors de l'envoi du message");
   }
@@ -164,7 +164,7 @@ void envoyer_fichier(Utilisateur* users, Utilisateur* user, const char* filepath
       found = 1;
       // Envoi des métadonnées
       write(users[i].socket_fd, "file", 5);
-      write(users[i].socket_fd, filepath, strlen(filepath) + 1);
+      write(users[i].socket_fd, filepath, strlen(filepath));
       write(users[i].socket_fd, &filesize, sizeof(long));
 
       // Envoi du fichier en blocs
@@ -189,8 +189,6 @@ void envoyer_fichier(Utilisateur* users, Utilisateur* user, const char* filepath
 void afficher_salons_connectes(){
 
 }
-
-
 
 ///////////////////////MAIN
 
@@ -321,7 +319,7 @@ int main(int argc, char const *argv[]) {
             printf("Connexion réussie pour %s\n", user.prenom);
 
             const char *message_connexion = "Connexion réussie";
-            write(client_fd, message_connexion, strlen(message_connexion) + 1);
+            write(client_fd, message_connexion, strlen(message_connexion));
             //problème avec cette fonction 
             for (int i = 0; i < MAX_FDS; i++) {
               if (users[i].socket_fd != -1) {
@@ -332,14 +330,14 @@ int main(int argc, char const *argv[]) {
               }
             }
 
-            char notification[256];
+            char notification[1024];
             snprintf(notification, sizeof(notification), "\n*************\n%s s'est connecté !\n*************\n", user.prenom);
             envoyer_message_a_tous_les_utilisateurs(users, client_fd, notification);
             ////// problème avec cette fonction
           } 
           else {
             const char *message_echec = "Connexion échouée";
-            write(client_fd, message_echec, strlen(message_echec) + 1);
+            write(client_fd, message_echec, strlen(message_echec));
           }
         }
         else if (strcmp(user.type, "message") == 0) {
@@ -444,7 +442,7 @@ int main(int argc, char const *argv[]) {
                       if (users[j].socket_fd != -1 && strcmp(users[j].prenom, utilisateur) == 0) {
                           char buffer[512];
                           snprintf(buffer, sizeof(buffer), "Message de %s : %s", user.prenom, user.message);
-                          int ret = write(users[j].socket_fd, buffer, strlen(buffer) + 1);
+                          int ret = write(users[j].socket_fd, buffer, strlen(buffer));
                           if (ret < 0) {
                               perror("Erreur lors de l'envoi du message au salon");
                           }
