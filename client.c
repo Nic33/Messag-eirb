@@ -192,6 +192,7 @@ int main(int argc, char const *argv[]) {
             if (len > 0 && input[len - 1] == '\n') {
                 input[len - 1] = '\0';
             }
+            //Pouvoir rajouter les salons par exemple 1 et 2 
             strcpy(user.dest, input); 
 
             if (strcmp(input, "exit") == 0) {

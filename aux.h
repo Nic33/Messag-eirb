@@ -16,6 +16,7 @@
 #define ADDRESS "127.0.0.1"
 #define USER_FILE "user.txt"
 #define BUFFER_SIZE 1024
+#define NB_SERVERS 10
 
 typedef struct {
     char* prenom;
