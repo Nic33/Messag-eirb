@@ -82,7 +82,7 @@ void liberer_socket(Utilisateur* users, int socket_fd) {
 void envoyer_message_a_utilisateur(Utilisateur* users, Utilisateur* user) {
   int found = 0;
   char buffer[512];
-  snprintf(buffer, sizeof(buffer), "\nMessage reçu de %s: %s", user->prenom, user->message);
+  snprintf(buffer, sizeof(buffer), "Message reçu de %s: %s", user->prenom, user->message);
 
   for (int i = 0; i < MAX_FDS; i++) {
     if (users[i].socket_fd != -1 && strcmp(users[i].prenom, user->dest) == 0) {
@@ -396,8 +396,6 @@ int main(int argc, char const *argv[]) {
                     if (salons_name[i] == NULL) {  // S'il n'y a pas encore de salon à cet indice
                         salons_name[i] = strdup(user.dest);  // Ajouter le nom du salon
                         salons_users[i] = malloc(256 * sizeof(char));  // Allouer un espace pour les utilisateurs
-                        strcpy(salons_users[i], user.prenom);  // Ajouter le créateur comme premier utilisateur
-                        strcat(salons_users[i], ",");  // Formatage pour la chaîne des utilisateurs
                         printf("Nouveau salon créé: %s\n", salons_name[i]);
                         break;
                     }
@@ -422,10 +420,10 @@ int main(int argc, char const *argv[]) {
                   strcat(salons_users[salon_trouve], ",");  // Séparer les utilisateurs par une virgule
                   printf("Utilisateur %s a rejoint le salon %s\n", user.prenom, salons_name[salon_trouve]);
               } else {
-                  printf("Le salon %s n'existe pas.\n", user.dest);
+                  printf("Le salon %s n'existe pas.\n", user.dest); 
               }
         }
-        else if (strcmp(user.type, "message_salon") == 0){
+        else if (strcmp(user.type, "message_salon") == 0) {
           int salon_trouve = -1;
           for (int i = 0; i < NB_SERVERS; i++) {
               if (salons_name[i] != NULL && strcmp(salons_name[i], user.dest) == 0) {
@@ -434,12 +432,19 @@ int main(int argc, char const *argv[]) {
               }
           }
           if (salon_trouve != -1) {
-              // Diviser les utilisateurs dans le salon
-              char *utilisateur = strtok(salons_users[salon_trouve], ",");
+              // Faire une copie de la chaîne utilisateurs pour éviter de modifier l'original
+              char *users_copy = strdup(salons_users[salon_trouve]);
+              if (users_copy == NULL) {
+                  perror("Erreur lors de la copie des utilisateurs");
+              }
+
+              // Diviser les utilisateurs dans le salon à partir de la copie
+              char *utilisateur = strtok(users_copy, ",");
               while (utilisateur != NULL) {
+                  printf("Utilisateur trouvé : %s\n", utilisateur);
                   // Trouver le socket de l'utilisateur et lui envoyer le message
                   for (int j = 0; j < MAX_FDS; j++) {
-                      if (users[j].socket_fd != -1 && strcmp(users[j].prenom, utilisateur) == 0) {
+                      if (users[j].socket_fd != -1 && strcmp(users[j].prenom, utilisateur) == 0 && strcmp(user.prenom, users[j].prenom) != 0) {
                           char buffer[512];
                           snprintf(buffer, sizeof(buffer), "Message de %s : %s", user.prenom, user.message);
                           int ret = write(users[j].socket_fd, buffer, strlen(buffer));
@@ -451,10 +456,14 @@ int main(int argc, char const *argv[]) {
                   }
                   utilisateur = strtok(NULL, ",");
               }
+
+              // Libérer la mémoire allouée pour la copie
+              free(users_copy);
           } else {
               printf("Le salon %s n'existe pas.\n", user.dest);
           }
-        }
+      }
+
         else if (strcmp(user.type, "dec_salon") == 0){
           int salon_trouve = -1;
           for (int i = 0; i < NB_SERVERS; i++) {
