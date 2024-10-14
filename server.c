@@ -185,12 +185,100 @@ void envoyer_fichier(Utilisateur* users, Utilisateur* user, const char* filepath
   }
 }
 
-// COmme la fonction "afficher_utilisateurs_connectes" -> liste les salons créer quand les utilisateurs veulent se connecter a un salon
-void afficher_salons_connectes(){
+void envoyer_fichier_salon(Utilisateur* users, Utilisateur* user, const char* filepath, long filesize, char **salons_name, char **salons_users){
+int salon_trouve = -1;
 
+  // Rechercher le salon correspondant
+  for (int i = 0; i < NB_SERVERS; i++) {
+    if (salons_name[i] != NULL && strcmp(salons_name[i], user->dest) == 0) {
+      salon_trouve = i;
+      break;
+    }
+  }
+
+  if (salon_trouve != -1) {
+    // Copie de la chaîne des utilisateurs du salon
+    char *users_copy = strdup(salons_users[salon_trouve]);
+    if (users_copy == NULL) {
+      perror("Erreur lors de la copie des utilisateurs");
+      return;
+    }
+
+    // Diviser la chaîne pour obtenir chaque utilisateur du salon
+    char *utilisateur = strtok(users_copy, ",");
+    while (utilisateur != NULL) {
+      // Trouver l'utilisateur dans la liste et envoyer le fichier
+      for (int j = 0; j < MAX_FDS; j++) {
+        if (users[j].socket_fd != -1 && strcmp(users[j].prenom, utilisateur) == 0 && strcmp(user->prenom, users[j].prenom) != 0) {
+          // Envoi des métadonnées du fichier
+          write(users[j].socket_fd, "file", 5);
+          write(users[j].socket_fd, filepath, strlen(filepath));
+          write(users[j].socket_fd, &filesize, sizeof(long));
+
+          // Ouverture et envoi du fichier en blocs
+          FILE *file = fopen(filepath, "rb");
+          if (file == NULL) {
+            perror("Erreur lors de l'ouverture du fichier");
+            free(users_copy);
+            return;
+          }
+
+          char buffer[1024];
+          size_t bytes_read;
+          while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+            write(users[j].socket_fd, buffer, bytes_read);
+          }
+
+          fclose(file);
+          printf("Fichier envoyé à %s dans le salon %s\n", utilisateur, user->dest);
+          break;
+        }
+      }
+
+      // Passer à l'utilisateur suivant dans le salon
+      utilisateur = strtok(NULL, ",");
+    }
+
+    // Libérer la mémoire allouée pour la copie
+    free(users_copy);
+  } else {
+    printf("Le salon %s n'existe pas.\n", user->dest);
+  }
 }
 
-///////////////////////MAIN
+
+void afficher_salons_connectes(Utilisateur* users, char **salons_name, char **salons_users, int socket_fd) {
+  printf("\n--- Salons connectés ---\n");
+
+  char notification[1024];
+  memset(notification, 0, sizeof(notification));
+  int salons_count = 0;
+
+  for (int i = 0; i < NB_SERVERS; i++) {
+    if (salons_name[i] != NULL && salons_users[i] != NULL) {
+      salons_count++;
+      strcat(notification, "Salon : ");
+      strcat(notification, salons_name[i]);
+      strcat(notification, "\nUtilisateurs : ");
+      strcat(notification, salons_users[i]);
+      strcat(notification, "\n");
+    }
+  }
+
+  if (salons_count == 0) {
+    strcat(notification, "*************\nAucun salon connecté.\n*************\n");
+  }
+
+  strcat(notification, "-------------------\n");
+
+  int ret = write(socket_fd, notification, strlen(notification));
+  if (ret < 0) {
+    perror("Erreur lors de l'envoi des salons connectés");
+  }
+
+  printf("%s", notification);
+}
+
 
 int main(int argc, char const *argv[]) {
   int welcome_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -320,15 +408,6 @@ int main(int argc, char const *argv[]) {
 
             const char *message_connexion = "Connexion réussie";
             write(client_fd, message_connexion, strlen(message_connexion));
-            //problème avec cette fonction 
-            for (int i = 0; i < MAX_FDS; i++) {
-              if (users[i].socket_fd != -1) {
-
-                afficher_utilisateurs_connectes(users, users[i].socket_fd, user.prenom);
-                //afficher_salons_connectes()
-                
-              }
-            }
 
             char notification[1024];
             snprintf(notification, sizeof(notification), "\n*************\n%s s'est connecté !\n*************\n", user.prenom);
@@ -370,6 +449,34 @@ int main(int argc, char const *argv[]) {
           printf("Fichier reçu avec succès de %s\n", user.prenom);
 
           envoyer_fichier(users, &user, filepath, filesize);
+
+        }else if (strcmp(user.type, "file_salon") == 0) {
+
+          char filepath[256];
+          strcpy(filepath, user.message);
+
+          long filesize;
+          read(client_fd, &filesize, sizeof(long));
+
+          FILE *file = fopen(filepath, "wb");
+          if (file == NULL) {
+            perror("Erreur lors de l'ouverture du fichier pour écriture");
+            continue;
+          }
+
+          char buffer[1024];
+          ssize_t bytes_read;
+          long bytes_received = 0;
+
+          while (bytes_received < filesize && (bytes_read = read(client_fd, buffer, sizeof(buffer))) > 0) {
+            fwrite(buffer, 1, bytes_read, file);
+            bytes_received += bytes_read;
+          }
+
+          fclose(file);
+          printf("Fichier reçu avec succès de %s\n", user.prenom);
+
+          envoyer_fichier_salon(users, &user, filepath, filesize, salons_name, salons_users);
         }
         else if (strcmp(user.type, "deconnexion") == 0) {
           char notification[256];
@@ -489,6 +596,13 @@ int main(int argc, char const *argv[]) {
               printf("Utilisateur %s s'est déconnecté du salon %s\n", user.prenom, user.dest);
           } else {
               printf("Le salon %s n'existe pas.\n", user.dest);
+          }
+        }else if (strcmp(user.type, "info") == 0){
+          for (int i = 0; i < MAX_FDS; i++) {
+            if (users[i].socket_fd != -1) {
+              afficher_utilisateurs_connectes(users, users[i].socket_fd, user.prenom);
+              afficher_salons_connectes(users, salons_name, salons_users, users[i].socket_fd);
+            }
           }
         }
 

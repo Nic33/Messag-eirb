@@ -37,7 +37,7 @@ int main(int argc, char const *argv[]) {
     while (1) {
 
         if(identification == 0){
-            printf("Quitter tapez 'exit'\n");
+            printf("\nQuitter tapez 'exit'\n");
             printf("Identification tapez '1'\n");
             printf("Nouvel utilisateur tapez '2'\n");
 
@@ -112,18 +112,6 @@ int main(int argc, char const *argv[]) {
                 if (strcmp(buffer, "Connexion réussie") == 0) {
                     printf("Bienvenue %s !\n", user.prenom);
 
-                    bytes_received = read(client_fd, buffer, sizeof(buffer));
-                    if (bytes_received < 0) {
-                        perror("Erreur lors de la lecture de la réponse");
-                        close(client_fd);
-                        exit(EXIT_FAILURE);
-                    }
-                    buffer[bytes_received] = '\0';
-                    printf("Information : %s\n", buffer);
-                    fflush(stdout);
-
-                    //servers available
-
                     identification = 1;
 
                 } else if (strcmp(buffer, "Connexion échouée") == 0) {
@@ -185,7 +173,8 @@ int main(int argc, char const *argv[]) {
         }
         else if (identification == 1){
             
-            printf("Quitter tapez 'exit'\n");
+            printf("\nQuitter tapez 'exit'\n");
+            printf("Info utilisateurs et salons tapez 'info'\n");
             printf("Discuter avec un destinataire tapez '1'\n");
             printf("Créer un salon tapez '2'\n");
             printf("Rejoindre un salon tapez '3'\n");
@@ -222,6 +211,31 @@ int main(int argc, char const *argv[]) {
                 free(user.dest);
 
                 break;  
+
+            }if (strcmp(input, "info") == 0) {
+
+                strcpy(user.type, "info");
+
+                size_t lengths[] = {strlen(user.prenom) + 1, strlen(user.nom) + 1, strlen(user.mdp) + 1, 
+                    strlen(user.type) + 1, strlen(user.message) + 1, strlen(user.dest) + 1};
+
+                write(client_fd, lengths, sizeof(lengths));
+                write(client_fd, user.prenom, lengths[0]);
+                write(client_fd, user.nom, lengths[1]);
+                write(client_fd, user.mdp, lengths[2]);
+                write(client_fd, user.type, lengths[3]);
+                write(client_fd, user.message, lengths[4]);
+                write(client_fd, user.dest, lengths[5]);
+
+                char buffer[1024];
+                size_t bytes_received = read(client_fd, buffer, sizeof(buffer));
+                if (bytes_received < 0) {
+                    perror("Erreur lors de la lecture de la réponse");
+                    close(client_fd);
+                    exit(EXIT_FAILURE);
+                }
+                buffer[bytes_received] = '\0';
+                printf("\n%s\n", buffer);
 
             }else if (strcmp(input, "1") == 0) {
 
@@ -293,6 +307,9 @@ int main(int argc, char const *argv[]) {
                 write(client_fd, user.dest, lengths[5]);
 
                 identification = 3;
+
+                printf("\nBienvenu dans le canal %s\n", user.dest);
+                printf("Vous povez envoyer des messages ou des fichiers avec la commande 'file <chemin_du_fichier>'\n");
                 
             }else{
                 printf("Valeur non reconnue\n");
@@ -402,12 +419,12 @@ int main(int argc, char const *argv[]) {
                     strcpy(user.message, input);
 
                     if (strcmp(input, "menu") == 0) {
-                        identification = 2;
+                        identification = 1;
 
                     }else if (strncmp(input, "file ", 5) == 0) {
                         char *filepath = input + 5;
 
-                        strcpy(user.type, "file");
+                        strcpy(user.type, "file_salon");
 
                         FILE *file = fopen(filepath, "rb");
                         if (file == NULL) {

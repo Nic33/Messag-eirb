@@ -12,7 +12,7 @@
 #include <string.h>
 
 #define MAX_FDS 4
-#define PORT 8081
+#define PORT 8080
 #define ADDRESS "127.0.0.1"
 #define USER_FILE "user.txt"
 #define BUFFER_SIZE 1024
