@@ -82,7 +82,7 @@ void liberer_socket(Utilisateur* users, int socket_fd) {
 void envoyer_message_a_utilisateur(Utilisateur* users, Utilisateur* user) {
   int found = 0;
   char buffer[512];
-  snprintf(buffer, sizeof(buffer), "Message reçu de %s: %s", user->prenom, user->message);
+  snprintf(buffer, sizeof(buffer), "\nMessage reçu de %s: %s", user->prenom, user->message);
 
   for (int i = 0; i < MAX_FDS; i++) {
     if (users[i].socket_fd != -1 && strcmp(users[i].prenom, user->dest) == 0) {
