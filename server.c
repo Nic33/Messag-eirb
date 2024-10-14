@@ -230,12 +230,12 @@ int main(int argc, char const *argv[]) {
   }
 
   ///GESTION DES SALONS 
-  int salons_name[NB_SERVERS];
-  int salons_users[NB_SERVERS];
-  int salons_index = -1;
+  char *salons_name[NB_SERVERS];
+  char *salons_users[NB_SERVERS];
+  //int salons_index = -1;
   for (int i = 0; i < NB_SERVERS; i++) {
-    salons_name[i] = -1;
-    salons_users[i] = -1;
+    salons_name[i] = NULL;
+    salons_users[i] = NULL;
   }
 
   while (1) {
@@ -373,7 +373,6 @@ int main(int argc, char const *argv[]) {
 
           envoyer_fichier(users, &user, filepath, filesize);
         }
-
         else if (strcmp(user.type, "deconnexion") == 0) {
           char notification[256];
           snprintf(notification, sizeof(notification), "\n*************\n%s s'est déconnecté !\n*************\n", user.prenom);
@@ -382,35 +381,40 @@ int main(int argc, char const *argv[]) {
 
         //Création d'un nouveau salon, lis le user.dest = "nom_du_salon" et ajoute dans le tableau salons_name ou la casse suivante à "-1" le nom du salon
         //Ajouter au même index du tableau salons_users le prenom de la source sous la forme "prenom,"
-        else if (strmcp(user.type, "new_salon") == 0){
-          // Chercher si le salon existe déjà
-          int salon_existe = 0;
-          for (int i = 0; i < NB_SERVERS; i++) {
-              if (salons_name[i] != -1 && strcmp(salons_name[i], user.dest) == 0) {
-                  salon_existe = 1;
-                  break;
-              }
-          }
-          if (!salon_existe) {
-              // Trouver un indice disponible dans salons_name
-              for (int i = 0; i < NB_SERVERS; i++) {
-                  if (salons_name[i] == -1) {
-                      salons_name[i] = strdup(user.dest);  // Ajouter le nom du salon
-                      salons_users[i] = malloc(256 * sizeof(char));  // Allouer un espace pour les utilisateurs
-                      printf("Nouveau salon créé: %s\n", salons_name[i]);
-                      break;
-                  }
-              }
-          } else {
-              printf("Le salon %s existe déjà.\n", user.dest);
-          }
+        else if (strcmp(user.type, "new_salon") == 0) {
+            // Chercher si le salon existe déjà
+            int salon_existe = 0;
+            for (int i = 0; i < NB_SERVERS; i++) {
+                // Vérifier si le salon existe déjà dans salons_name
+                if (salons_name[i] != NULL && strcmp(salons_name[i], user.dest) == 0) {
+                    salon_existe = 1;
+                    break;
+                }
+            }
+            
+            if (!salon_existe) {
+                // Trouver un indice disponible dans salons_name
+                for (int i = 0; i < NB_SERVERS; i++) {
+                    if (salons_name[i] == NULL) {  // S'il n'y a pas encore de salon à cet indice
+                        salons_name[i] = strdup(user.dest);  // Ajouter le nom du salon
+                        salons_users[i] = malloc(256 * sizeof(char));  // Allouer un espace pour les utilisateurs
+                        strcpy(salons_users[i], user.prenom);  // Ajouter le créateur comme premier utilisateur
+                        strcat(salons_users[i], ",");  // Formatage pour la chaîne des utilisateurs
+                        printf("Nouveau salon créé: %s\n", salons_name[i]);
+                        break;
+                    }
+                }
+            } else {
+                printf("Le salon %s existe déjà.\n", user.dest);
+            }
         }
+
         //Regarde le nom du salon dans user.dest, si le salon existe alors dans le tableau salons_name à l'indice "n" alors la variable "salons_index" prend la valeur de "n"
         //Le user est ajouter à l'emplacement salons_users[n] -> "prenom,"
-        else if (strmcp(user.type, "join_salon" == 0)){
+        else if (strcmp(user.type, "join_salon") == 0){
               int salon_trouve = -1;
               for (int i = 0; i < NB_SERVERS; i++) {
-                  if (salons_name[i] != -1 && strcmp(salons_name[i], user.dest) == 0) {
+                  if (salons_name[i] != NULL && strcmp(salons_name[i], user.dest) == 0) {
                       salon_trouve = i;  // Trouvé, stocker l'index du salon
                       break;
                   }
@@ -423,10 +427,10 @@ int main(int argc, char const *argv[]) {
                   printf("Le salon %s n'existe pas.\n", user.dest);
               }
         }
-        else if (strmcp(user.type, "message_salon" == 0)){
+        else if (strcmp(user.type, "message_salon") == 0){
           int salon_trouve = -1;
           for (int i = 0; i < NB_SERVERS; i++) {
-              if (salons_name[i] != -1 && strcmp(salons_name[i], user.dest) == 0) {
+              if (salons_name[i] != NULL && strcmp(salons_name[i], user.dest) == 0) {
                   salon_trouve = i;
                   break;
               }
@@ -453,10 +457,10 @@ int main(int argc, char const *argv[]) {
               printf("Le salon %s n'existe pas.\n", user.dest);
           }
         }
-        else if (strmcp(user.type, "dec_salon" == 0)){
+        else if (strcmp(user.type, "dec_salon") == 0){
           int salon_trouve = -1;
           for (int i = 0; i < NB_SERVERS; i++) {
-              if (salons_name[i] != -1 && strcmp(salons_name[i], user.dest) == 0) {
+              if (salons_name[i] != NULL && strcmp(salons_name[i], user.dest) == 0) {
                   salon_trouve = i;
                   break;
               }
