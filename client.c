@@ -107,7 +107,6 @@ int main(int argc, char const *argv[]) {
                 }
 
                 buffer[bytes_received] = '\0';
-                printf("%s\n", buffer);
 
                 if (strcmp(buffer, "Connexion réussie") == 0) {
                     printf("Bienvenue %s !\n", user.prenom);
@@ -174,7 +173,8 @@ int main(int argc, char const *argv[]) {
         else if (identification == 1){
             
             printf("\nQuitter tapez 'exit'\n");
-            printf("Info utilisateurs et salons tapez 'info'\n");
+            printf("Info utilisateurs tapez 'info'\n");
+            printf("Info salons tapez 'info salon'\n");
             printf("Discuter avec un destinataire tapez '1'\n");
             printf("Créer un salon tapez '2'\n");
             printf("Rejoindre un salon tapez '3'\n");
@@ -202,7 +202,6 @@ int main(int argc, char const *argv[]) {
                 write(client_fd, user.message, lengths[4]);
                 write(client_fd, user.dest, lengths[5]);
             
-
                 free(user.prenom);
                 free(user.nom);
                 free(user.mdp);
@@ -215,6 +214,31 @@ int main(int argc, char const *argv[]) {
             }if (strcmp(input, "info") == 0) {
 
                 strcpy(user.type, "info");
+
+                size_t lengths[] = {strlen(user.prenom) + 1, strlen(user.nom) + 1, strlen(user.mdp) + 1, 
+                    strlen(user.type) + 1, strlen(user.message) + 1, strlen(user.dest) + 1};
+
+                write(client_fd, lengths, sizeof(lengths));
+                write(client_fd, user.prenom, lengths[0]);
+                write(client_fd, user.nom, lengths[1]);
+                write(client_fd, user.mdp, lengths[2]);
+                write(client_fd, user.type, lengths[3]);
+                write(client_fd, user.message, lengths[4]);
+                write(client_fd, user.dest, lengths[5]);
+
+                char buffer[1024];
+                size_t bytes_received = read(client_fd, buffer, sizeof(buffer));
+                if (bytes_received < 0) {
+                    perror("Erreur lors de la lecture de la réponse");
+                    close(client_fd);
+                    exit(EXIT_FAILURE);
+                }
+                buffer[bytes_received] = '\0';
+                printf("\n%s\n", buffer);
+
+            }else if (strcmp(input, "info salon") == 0) {
+
+                strcpy(user.type, "info_salon");
 
                 size_t lengths[] = {strlen(user.prenom) + 1, strlen(user.nom) + 1, strlen(user.mdp) + 1, 
                     strlen(user.type) + 1, strlen(user.message) + 1, strlen(user.dest) + 1};
@@ -306,11 +330,26 @@ int main(int argc, char const *argv[]) {
                 write(client_fd, user.message, lengths[4]);
                 write(client_fd, user.dest, lengths[5]);
 
-                identification = 3;
+                char buffer[1024];
+                ssize_t bytes_received = read(client_fd, buffer, sizeof(buffer));
+                if (bytes_received < 0) {
+                    perror("Erreur lors de la lecture de la réponse");
+                    close(client_fd);
+                    exit(EXIT_FAILURE);
+                }
 
-                printf("\nBienvenu dans le canal %s\n", user.dest);
-                printf("Vous povez envoyer des messages ou des fichiers avec la commande 'file <chemin_du_fichier>'\n");
+                buffer[bytes_received] = '\0';
+                printf("%s\n", buffer);
+
+                if (strcmp(buffer, "Pas de salon") == 0) {
+                    printf("\nCe salon n'existe pas\n");                
+                }else{
+                    printf("\nBienvenu dans le canal %s\n", user.dest);
+                    printf("Vous povez envoyer des messages ou des fichiers avec la commande 'file <chemin_du_fichier>'\n");
                 
+                    identification = 3;
+                }
+
             }else{
                 printf("Valeur non reconnue\n");
             }
@@ -419,6 +458,20 @@ int main(int argc, char const *argv[]) {
                     strcpy(user.message, input);
 
                     if (strcmp(input, "menu") == 0) {
+
+                        strcpy(user.type, "dec_salon");
+
+                        size_t lengths[] = {strlen(user.prenom) + 1, strlen(user.nom) + 1, strlen(user.mdp) + 1, 
+                            strlen(user.type) + 1, strlen(user.message) + 1, strlen(user.dest) + 1};
+
+                        write(client_fd, lengths, sizeof(lengths));
+                        write(client_fd, user.prenom, lengths[0]);
+                        write(client_fd, user.nom, lengths[1]);
+                        write(client_fd, user.mdp, lengths[2]);
+                        write(client_fd, user.type, lengths[3]);
+                        write(client_fd, user.message, lengths[4]);
+                        write(client_fd, user.dest, lengths[5]);
+                    
                         identification = 1;
 
                     }else if (strncmp(input, "file ", 5) == 0) {

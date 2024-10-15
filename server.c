@@ -1,6 +1,7 @@
 #include <aux.h>
 #include <ctype.h>  
 #include <sys/poll.h>
+#include <stdbool.h>
 
 // Ajoute un utilisateur au fichier
 void add_user_to_file(char *prenom, char *nom, char *password) {
@@ -49,11 +50,13 @@ int verify_user_in_file(const char *prenom, const char *nom, const char *passwor
 }
 
 // Associe un utilisateur à un socket donné
-void associer_utilisateur_a_socket(Utilisateur* users, int socket_fd, char* prenom) {
+void associer_utilisateur_a_socket(Utilisateur* users, int socket_fd, char* prenom,  char* nom) {
   for (int i = 0; i < MAX_FDS; i++) {
     if (users[i].socket_fd == -1) {
       users[i].socket_fd = socket_fd;
       users[i].prenom = strdup(prenom);
+      users[i].nom = strdup(nom);
+
       printf("Utilisateur %s est maintenant connecté sur la socket %d\n", prenom, socket_fd);
       break;
     }
@@ -82,7 +85,7 @@ void liberer_socket(Utilisateur* users, int socket_fd) {
 void envoyer_message_a_utilisateur(Utilisateur* users, Utilisateur* user) {
   int found = 0;
   char buffer[512];
-  snprintf(buffer, sizeof(buffer), "Message reçu de %s: %s", user->prenom, user->message);
+  snprintf(buffer, sizeof(buffer), "\nMessage reçu de %s: %s", user->prenom, user->message);
 
   for (int i = 0; i < MAX_FDS; i++) {
     if (users[i].socket_fd != -1 && strcmp(users[i].prenom, user->dest) == 0) {
@@ -128,10 +131,11 @@ void afficher_utilisateurs_connectes(Utilisateur* users, int socket_fd, char *pr
   snprintf(notification, sizeof(notification), "\n*************\n");
 
   for (int i = 0; i < MAX_FDS; i++) {
-    if (users[i].socket_fd != -1){
 
-      printf("users[i].prenom = %s\n", users[i].prenom);
-      printf("user.prenom = %s\n", prenom);
+    printf("users[i].prenom = %s\n", users[i].prenom);
+    printf("user.prenom = %s\n", prenom);
+
+    if (users[i].socket_fd != -1 && strcmp(users[i].prenom, prenom) != 0){
 
       if (strcmp(users[i].prenom, prenom) != 0) {
         strcat(notification, "Utilisateur : ");
@@ -153,7 +157,7 @@ void afficher_utilisateurs_connectes(Utilisateur* users, int socket_fd, char *pr
     perror("Erreur lors de l'envoi du message");
   }
   printf("%s", notification);  
-  printf("\n-----------------------------\n");
+  printf("-----------------------------\n");
 }
 
 void envoyer_fichier(Utilisateur* users, Utilisateur* user, const char* filepath, long filesize) {
@@ -251,8 +255,11 @@ void afficher_salons_connectes(Utilisateur* users, char **salons_name, char **sa
   printf("\n--- Salons connectés ---\n");
 
   char notification[1024];
+
   memset(notification, 0, sizeof(notification));
   int salons_count = 0;
+
+  snprintf(notification, sizeof(notification), "\n*************\n");
 
   for (int i = 0; i < NB_SERVERS; i++) {
     if (salons_name[i] != NULL && salons_users[i] != NULL) {
@@ -266,11 +273,12 @@ void afficher_salons_connectes(Utilisateur* users, char **salons_name, char **sa
   }
 
   if (salons_count == 0) {
-    strcat(notification, "*************\nAucun salon connecté.\n*************\n");
+    strcat(notification, "Aucun salon\n");
   }
 
-  strcat(notification, "-------------------\n");
+  printf("-------------------\n");
 
+  strcat(notification, "*************\n");
   int ret = write(socket_fd, notification, strlen(notification));
   if (ret < 0) {
     perror("Erreur lors de l'envoi des salons connectés");
@@ -402,23 +410,31 @@ int main(int argc, char const *argv[]) {
 
         }
         else if (strcmp(user.type, "connect") == 0) {
+
+          bool user_exist = false;
+          const char *message_connexion = "Connexion échouée";
+
           if (verify_user_in_file(user.prenom, user.nom, user.mdp)) {
-            associer_utilisateur_a_socket(users, client_fd, user.prenom);
-            printf("Connexion réussie pour %s\n", user.prenom);
+            
+            for (int i = 0; i < MAX_FDS; i++) {
+              if (users[i].socket_fd != -1 && 
+                strcmp(users[i].prenom, user.prenom) == 0 && 
+                strcmp(users[i].nom, user.nom) == 0) {
+                user_exist = true;
+                break;
+              }
+            }
 
-            const char *message_connexion = "Connexion réussie";
-            write(client_fd, message_connexion, strlen(message_connexion));
+            if (user_exist == false){
+              associer_utilisateur_a_socket(users, client_fd, user.prenom, user.nom);
+              printf("Connexion réussie pour %s\n", user.prenom);
 
-            char notification[1024];
-            snprintf(notification, sizeof(notification), "\n*************\n%s s'est connecté !\n*************\n", user.prenom);
-            envoyer_message_a_tous_les_utilisateurs(users, client_fd, notification);
-            ////// problème avec cette fonction
+              message_connexion = "Connexion réussie";
+            }
           } 
-          else {
-            const char *message_echec = "Connexion échouée";
-            write(client_fd, message_echec, strlen(message_echec));
-          }
+          write(client_fd, message_connexion, strlen(message_connexion));
         }
+
         else if (strcmp(user.type, "message") == 0) {
           envoyer_message_a_utilisateur(users, &user);
         }
@@ -515,20 +531,27 @@ int main(int argc, char const *argv[]) {
         //Regarde le nom du salon dans user.dest, si le salon existe alors dans le tableau salons_name à l'indice "n" alors la variable "salons_index" prend la valeur de "n"
         //Le user est ajouter à l'emplacement salons_users[n] -> "prenom,"
         else if (strcmp(user.type, "join_salon") == 0){
-              int salon_trouve = -1;
-              for (int i = 0; i < NB_SERVERS; i++) {
-                  if (salons_name[i] != NULL && strcmp(salons_name[i], user.dest) == 0) {
-                      salon_trouve = i;  // Trouvé, stocker l'index du salon
-                      break;
-                  }
-              }
-              if (salon_trouve != -1) {
-                  strcat(salons_users[salon_trouve], user.prenom);  // Ajouter le prénom de l'utilisateur
-                  strcat(salons_users[salon_trouve], ",");  // Séparer les utilisateurs par une virgule
-                  printf("Utilisateur %s a rejoint le salon %s\n", user.prenom, salons_name[salon_trouve]);
-              } else {
-                  printf("Le salon %s n'existe pas.\n", user.dest); 
-              }
+          int salon_trouve = -1;
+          for (int i = 0; i < NB_SERVERS; i++) {
+            if (salons_name[i] != NULL && strcmp(salons_name[i], user.dest) == 0) {
+              salon_trouve = i;  // Trouvé, stocker l'index du salon
+              break;
+            }
+          }
+          const char *message_connexion = "Salon trouvé"; 
+
+          if (salon_trouve != -1) {
+            strcat(salons_users[salon_trouve], user.prenom);  // Ajouter le prénom de l'utilisateur
+            strcat(salons_users[salon_trouve], ",");  // Séparer les utilisateurs par une virgule
+            printf("Utilisateur %s a rejoint le salon %s\n", user.prenom, salons_name[salon_trouve]);
+            
+          } else {
+            message_connexion = "Pas de salon";          
+            printf("Le salon %s n'existe pas.\n", user.dest); 
+          }
+
+          write(client_fd, message_connexion, strlen(message_connexion));
+
         }
         else if (strcmp(user.type, "message_salon") == 0) {
           int salon_trouve = -1;
@@ -574,36 +597,48 @@ int main(int argc, char const *argv[]) {
         else if (strcmp(user.type, "dec_salon") == 0){
           int salon_trouve = -1;
           for (int i = 0; i < NB_SERVERS; i++) {
-              if (salons_name[i] != NULL && strcmp(salons_name[i], user.dest) == 0) {
-                  salon_trouve = i;
-                  break;
-              }
+            if (salons_name[i] != NULL && strcmp(salons_name[i], user.dest) == 0) {
+              salon_trouve = i;
+              break;
+            }
           }
           if (salon_trouve != -1) {
-              // Remplacer le prénom de l'utilisateur par une chaîne vide
-              char *new_list = malloc(256 * sizeof(char));
-              strcpy(new_list, "");
-              char *utilisateur = strtok(salons_users[salon_trouve], ",");
-              while (utilisateur != NULL) {
-                  if (strcmp(utilisateur, user.prenom) != 0) {
-                      strcat(new_list, utilisateur);
-                      strcat(new_list, ",");
-                  }
-                  utilisateur = strtok(NULL, ",");
-              }
-              strcpy(salons_users[salon_trouve], new_list);  // Mettre à jour la liste des utilisateurs
-              free(new_list);
-              printf("Utilisateur %s s'est déconnecté du salon %s\n", user.prenom, user.dest);
+            // Remplacer le prénom de l'utilisateur par une chaîne vide
+            char *new_list = malloc(256 * sizeof(char));
+            strcpy(new_list, "");
+            char *utilisateur = strtok(salons_users[salon_trouve], ",");
+            while (utilisateur != NULL) {
+                if (strcmp(utilisateur, user.prenom) != 0) {
+                    strcat(new_list, utilisateur);
+                    strcat(new_list, ",");
+                }
+                utilisateur = strtok(NULL, ",");
+            }
+            strcpy(salons_users[salon_trouve], new_list);  // Mettre à jour la liste des utilisateurs
+            free(new_list);
+            printf("Utilisateur %s s'est déconnecté du salon %s\n", user.prenom, user.dest);
+            
+            char buffer[512];
+            snprintf(buffer, sizeof(buffer), "%s s'est déconnecté du salon\n", user.prenom);
+            envoyer_message_a_tous_les_utilisateurs(users, user.socket_fd, buffer);
           } else {
-              printf("Le salon %s n'existe pas.\n", user.dest);
+            printf("Le salon %s n'existe pas.\n", user.dest);
           }
+
         }else if (strcmp(user.type, "info") == 0){
           for (int i = 0; i < MAX_FDS; i++) {
-            if (users[i].socket_fd != -1) {
+            if (users[i].socket_fd != -1 && strcmp(users[i].prenom, user.prenom) == 0) {
               afficher_utilisateurs_connectes(users, users[i].socket_fd, user.prenom);
+            }
+          }
+        }else if (strcmp(user.type, "info_salon") == 0){
+          for (int i = 0; i < MAX_FDS; i++) {
+            if (users[i].socket_fd != -1 && strcmp(users[i].prenom, user.prenom) == 0) {
               afficher_salons_connectes(users, salons_name, salons_users, users[i].socket_fd);
             }
           }
+        }else{
+          printf("Error: commande non reconnue\n");
         }
 
         free(user.prenom);

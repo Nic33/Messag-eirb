@@ -30,12 +30,4 @@ typedef struct {
 
 void print_error(int result, char* s);
 
-int read_message_from_socket(int fd, char* buffer, int size);
-int read_int_from_socket(int fd);
-
-void write_on_socket(int fd, const char* buffer, int size);
-void write_int_as_message(int fd, int val);
-
-void deserialize_user(Utilisateur* user, const char* buffer);
-
 #endif
