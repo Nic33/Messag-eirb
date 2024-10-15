@@ -78,10 +78,7 @@ void liberer_socket(Utilisateur* users, int socket_fd) {
   }
 }
 
-
 // Envoie un message à l'utilisateur ayant le prénom spécifié
-
-////// FONCTION A MODIFIER POUR LES SALONS + CREER LES SOCKETS DES SALONS 
 void envoyer_message_a_utilisateur(Utilisateur* users, Utilisateur* user) {
   int found = 0;
   char buffer[512];
@@ -160,37 +157,8 @@ void afficher_utilisateurs_connectes(Utilisateur* users, int socket_fd, char *pr
   printf("-----------------------------\n");
 }
 
-void envoyer_fichier(Utilisateur* users, Utilisateur* user, const char* filepath, long filesize) {
-  int found = 0;
-
-  for (int i = 0; i < MAX_FDS; i++) {
-    if (users[i].socket_fd != -1 && strcmp(users[i].prenom, user->dest) == 0) {
-      found = 1;
-      // Envoi des métadonnées
-      write(users[i].socket_fd, "file", 5);
-      write(users[i].socket_fd, filepath, strlen(filepath));
-      write(users[i].socket_fd, &filesize, sizeof(long));
-
-      // Envoi du fichier en blocs
-      FILE *file = fopen(filepath, "rb");
-      char buffer[1024];
-      size_t bytes_read;
-      while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
-        write(users[i].socket_fd, buffer, bytes_read);
-      }
-      fclose(file);
-      printf("Fichier relayé à %s\n", user->dest);
-      break;
-    }
-  }
-
-  if (!found) {
-      printf("Utilisateur destinataire non trouvé\n");
-  }
-}
-
 void envoyer_fichier_salon(Utilisateur* users, Utilisateur* user, const char* filepath, long filesize, char **salons_name, char **salons_users){
-int salon_trouve = -1;
+  int salon_trouve = -1;
 
   // Rechercher le salon correspondant
   for (int i = 0; i < NB_SERVERS; i++) {
@@ -249,7 +217,6 @@ int salon_trouve = -1;
     printf("Le salon %s n'existe pas.\n", user->dest);
   }
 }
-
 
 void afficher_salons_connectes(Utilisateur* users, char **salons_name, char **salons_users, int socket_fd) {
   printf("\n--- Salons connectés ---\n");
