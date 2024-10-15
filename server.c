@@ -287,6 +287,33 @@ void afficher_salons_connectes(Utilisateur* users, char **salons_name, char **sa
   printf("%s", notification);
 }
 
+int find_client_by_name(Utilisateur* users,const char* dest) {
+  for (int i = 0; i < MAX_FDS; i++) {
+    if (strcmp(users[i].prenom, dest) == 0) {
+      return users[i].socket_fd;
+    }
+  }
+  return -1;
+}
+
+void handle_file_transfer(int client_fd, Utilisateur* user, Utilisateur* users) {
+  long filesize;
+  read(client_fd, &filesize, sizeof(long));
+
+  char buffer[BUFFER_SIZE];
+  ssize_t bytes_read;
+  long total_bytes_read = 0;
+
+  while (total_bytes_read < filesize && (bytes_read = read(client_fd, buffer, sizeof(buffer))) > 0) {
+    int dest_fd = find_client_by_name(users, user->dest);
+    if (dest_fd != -1) {
+      write(dest_fd, buffer, bytes_read);
+    }
+    total_bytes_read += bytes_read;
+  }
+
+  printf("Fichier reçu et transféré à %s\n", user->dest);
+}
 
 int main(int argc, char const *argv[]) {
   int welcome_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -439,33 +466,8 @@ int main(int argc, char const *argv[]) {
           envoyer_message_a_utilisateur(users, &user);
         }
         else if (strcmp(user.type, "file") == 0) {
-
-          char filepath[256];
-          strcpy(filepath, user.message);
-
-          long filesize;
-          read(client_fd, &filesize, sizeof(long));
-
-          FILE *file = fopen(filepath, "wb");
-          if (file == NULL) {
-            perror("Erreur lors de l'ouverture du fichier pour écriture");
-            continue;
-          }
-
-          char buffer[1024];
-          ssize_t bytes_read;
-          long bytes_received = 0;
-
-          while (bytes_received < filesize && (bytes_read = read(client_fd, buffer, sizeof(buffer))) > 0) {
-            fwrite(buffer, 1, bytes_read, file);
-            bytes_received += bytes_read;
-          }
-
-          fclose(file);
-          printf("Fichier reçu avec succès de %s\n", user.prenom);
-
-          envoyer_fichier(users, &user, filepath, filesize);
-
+          handle_file_transfer(client_fd, &user, users);
+          
         }else if (strcmp(user.type, "file_salon") == 0) {
 
           char filepath[256];
