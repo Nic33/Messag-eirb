@@ -384,7 +384,6 @@ int main(int argc, char const *argv[]) {
                         }
 
                         fseek(file, 0L, SEEK_END);
-                        long filesize = ftell(file);
                         rewind(file);
 
                         size_t lengths[] = {
@@ -397,6 +396,7 @@ int main(int argc, char const *argv[]) {
                         };
 
                         write(client_fd, lengths, sizeof(lengths));
+
                         write(client_fd, user.prenom, lengths[0]);
                         write(client_fd, user.nom, lengths[1]);
                         write(client_fd, user.mdp, lengths[2]);
@@ -404,9 +404,9 @@ int main(int argc, char const *argv[]) {
                         write(client_fd, filepath, lengths[4]);
                         write(client_fd, user.dest, lengths[5]);
 
-                        write(client_fd, &filesize, sizeof(long));
+                        //write(client_fd, &filesize, sizeof(long));
 
-                        char buffer[1024];
+                        char buffer[BUFFER_SIZE];
                         size_t bytes_read;
                         while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
                             write(client_fd, buffer, bytes_read);
@@ -416,30 +416,80 @@ int main(int argc, char const *argv[]) {
                         printf("Fichier envoyé avec succès.\n");
 
                     }else {
+
                         size_t lengths[] = {strlen(user.prenom) + 1, strlen(user.nom) + 1, strlen(user.mdp) + 1, 
                             strlen(user.type) + 1, strlen(user.message) + 1, strlen(user.dest) + 1};
 
                         write(client_fd, lengths, sizeof(lengths));
+
                         write(client_fd, user.prenom, lengths[0]);
                         write(client_fd, user.nom, lengths[1]);
                         write(client_fd, user.mdp, lengths[2]);
                         write(client_fd, user.type, lengths[3]);
                         write(client_fd, user.message, lengths[4]);
                         write(client_fd, user.dest, lengths[5]);
+                    
                     }
                 }
                 
                 else if (fds[1].revents & POLLIN) {
-                    char message[256];
+                    char message[BUFFER_SIZE];
 
                     ssize_t message_bytes = read(fds[1].fd, message, sizeof(message));
                     if (message_bytes <= 0) {
-                        printf("La personne s'est déconnecté\n");
+                        printf("La personne s'est déconnectée\n");
                         identification = 1;
                     }
+
                     message[message_bytes] = '\0';  
-                    printf("%s\n", message);
+
+                    // Vérifier si le message commence par "file:"
+                    if (strncmp(message, "file:", 5) == 0) {
+                        
+                        // Extraire le nom du fichier
+                        char *filename = message + 5; 
+                        filename = strtok(filename, "\n");
+
+                        FILE *file = fopen(filename, "wb");
+                        if (file == NULL) {
+                            perror("Erreur lors de la création du fichier");
+                        }
+
+                        printf("Création du fichier test : %s\n", filename);
+
+                        // Lire la taille du fichier
+                        long filesize = 7;
+                        // if (read(fds[1].fd, &filesize, sizeof(long)) <= 0) {
+                        //     perror("Erreur lors de la lecture de la taille du fichier");
+                        //     fclose(file);
+                        // }
+
+                        printf("\nTaille du fichier à recevoir: %ld octets\n", filesize);
+
+                        char file_buffer[BUFFER_SIZE];
+                        ssize_t bytes_read;
+                        long total_bytes_read = 0;
+                        while (total_bytes_read < filesize && (bytes_read = read(fds[1].fd, file_buffer, sizeof(file_buffer))) > 0) {
+                            printf("Octets lus: %zd\n", bytes_read);
+                            fwrite(file_buffer, 1, bytes_read, file);
+                            total_bytes_read += bytes_read;
+                            printf("Total des octets reçus: %ld/%ld\n", total_bytes_read, filesize);
+                        }
+
+                        if (total_bytes_read == filesize) {
+                            printf("Fichier %s reçu avec succès.\n", filename);
+                        } else {
+                            printf("Erreur : fichier incomplet reçu. Seulement %ld/%ld octets reçus.\n", total_bytes_read, filesize);
+                        }
+
+                        fclose(file);
+
+                    } else {
+                        printf("%s\n", message);
+                    }
                 }
+
+
             }
         }else if(identification == 3){
 

@@ -182,23 +182,50 @@ void envoyer_fichier_salon(Utilisateur* users, Utilisateur* user, const char* fi
       // Trouver l'utilisateur dans la liste et envoyer le fichier
       for (int j = 0; j < MAX_FDS; j++) {
         if (users[j].socket_fd != -1 && strcmp(users[j].prenom, utilisateur) == 0 && strcmp(user->prenom, users[j].prenom) != 0) {
-          // Envoi des métadonnées du fichier
-          write(users[j].socket_fd, "file", 5);
-          write(users[j].socket_fd, filepath, strlen(filepath));
-          write(users[j].socket_fd, &filesize, sizeof(long));
 
-          // Ouverture et envoi du fichier en blocs
-          FILE *file = fopen(filepath, "rb");
+          FILE *file = fopen(user->message, "rb"); 
           if (file == NULL) {
             perror("Erreur lors de l'ouverture du fichier");
-            free(users_copy);
             return;
           }
 
+          // Obtenir la taille du fichier
+          fseek(file, 0L, SEEK_END);
+          long filesize = ftell(file);
+          rewind(file);
+
+          // Envoyer une indication que le message est un fichier
+          char file_message[256];
+          snprintf(file_message, sizeof(file_message), "file:%s", user->message);
+          
+          printf("Envoie titre du fichier : %s\n", file_message);
+        
+          write(users[j].socket_fd, file_message, strlen(file_message));
+
+          // Envoyer la taille du fichier
+          printf("\nTaille du fichier à envoyer: %ld octets\n", filesize);
+          //write(dest_fd, filesize, sizeof(long));
+
+          // Lire et envoyer le fichier par morceaux
           char buffer[1024];
-          size_t bytes_read;
+          ssize_t bytes_read;
+          long total_bytes_sent = 0;
+
           while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
-            write(users[j].socket_fd, buffer, bytes_read);
+            ssize_t bytes_written = write(users[j].socket_fd, buffer, bytes_read);
+            if (bytes_written < 0) {
+              perror("Erreur lors de l'envoi du fichier");
+              fclose(file);
+            }
+
+            total_bytes_sent += bytes_written;
+            printf("\nOctets envoyés: %ld/%ld\n", total_bytes_sent, filesize);
+          }
+
+          if (total_bytes_sent == filesize) {
+            printf("Fichier %s envoyé avec succès à %s.\n", user->message, user->dest);
+          } else {
+            printf("Erreur lors de l'envoi: seulement %ld/%ld octets envoyés.\n", total_bytes_sent, filesize);
           }
 
           fclose(file);
@@ -254,6 +281,13 @@ void afficher_salons_connectes(Utilisateur* users, char **salons_name, char **sa
   printf("%s", notification);
 }
 
+/**
+ * @brief 
+ * 
+ * @param users 
+ * @param dest 
+ * @return int 
+ */
 int find_client_by_name(Utilisateur* users,const char* dest) {
   for (int i = 0; i < MAX_FDS; i++) {
     if (strcmp(users[i].prenom, dest) == 0) {
@@ -263,24 +297,73 @@ int find_client_by_name(Utilisateur* users,const char* dest) {
   return -1;
 }
 
+/**
+ * @brief 
+ * 
+ * @param client_fd 
+ * @param user 
+ * @param users 
+ */
 void handle_file_transfer(int client_fd, Utilisateur* user, Utilisateur* users) {
-  long filesize;
-  read(client_fd, &filesize, sizeof(long));
 
-  char buffer[BUFFER_SIZE];
-  ssize_t bytes_read;
-  long total_bytes_read = 0;
-
-  while (total_bytes_read < filesize && (bytes_read = read(client_fd, buffer, sizeof(buffer))) > 0) {
     int dest_fd = find_client_by_name(users, user->dest);
-    if (dest_fd != -1) {
-      write(dest_fd, buffer, bytes_read);
-    }
-    total_bytes_read += bytes_read;
-  }
 
-  printf("Fichier reçu et transféré à %s\n", user->dest);
+    if (dest_fd == -1) {
+        printf("Client destinataire non trouvé: %s\n", user->dest);
+        return;
+    }
+
+    // Ouvrir le fichier à envoyer
+    FILE *file = fopen(user->message, "rb"); 
+    if (file == NULL) {
+        perror("Erreur lors de l'ouverture du fichier");
+        return;
+    }
+
+    // Obtenir la taille du fichier
+    fseek(file, 0L, SEEK_END);
+    long filesize = ftell(file);
+    rewind(file);
+
+    printf("Taille du fichier à envoyer: %ld octets\n", filesize);
+
+    // Envoyer une indication que le message est un fichier
+    char file_message[256];
+    snprintf(file_message, sizeof(file_message), "file:%s", user->message);
+    
+    printf("Envoi du fichier: %s\n", file_message);
+ 
+    write(dest_fd, file_message, strlen(file_message));
+
+    // Envoyer la taille du fichier
+    //write(dest_fd, &filesize, sizeof(long));
+
+    // Lire et envoyer le fichier par morceaux
+    char buffer[1024];
+    ssize_t bytes_read;
+    long total_bytes_sent = 0;
+
+    while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        ssize_t bytes_written = write(dest_fd, buffer, bytes_read);
+        if (bytes_written < 0) {
+            perror("Erreur lors de l'envoi du fichier");
+            fclose(file);
+            return;
+        }
+
+        total_bytes_sent += bytes_written;
+        printf("\nOctets envoyés: %ld/%ld\n", total_bytes_sent, filesize);
+    }
+
+    if (total_bytes_sent == filesize) {
+        printf("Fichier %s envoyé avec succès à %s.\n", user->message, user->dest);
+    } else {
+        printf("Erreur lors de l'envoi: seulement %ld/%ld octets envoyés.\n", total_bytes_sent, filesize);
+    }
+
+    fclose(file);
 }
+
 
 int main(int argc, char const *argv[]) {
   int welcome_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -374,6 +457,8 @@ int main(int argc, char const *argv[]) {
           continue; 
         }
 
+        printf("bytes_received : %ld\n", bytes_received);
+
         // Allocation de mémoire pour chaque chaîne
         user.prenom = malloc(lengths[0] * sizeof(char));
         user.nom = malloc(lengths[1] * sizeof(char));
@@ -442,24 +527,6 @@ int main(int argc, char const *argv[]) {
 
           long filesize;
           read(client_fd, &filesize, sizeof(long));
-
-          FILE *file = fopen(filepath, "wb");
-          if (file == NULL) {
-            perror("Erreur lors de l'ouverture du fichier pour écriture");
-            continue;
-          }
-
-          char buffer[1024];
-          ssize_t bytes_read;
-          long bytes_received = 0;
-
-          while (bytes_received < filesize && (bytes_read = read(client_fd, buffer, sizeof(buffer))) > 0) {
-            fwrite(buffer, 1, bytes_read, file);
-            bytes_received += bytes_read;
-          }
-
-          fclose(file);
-          printf("Fichier reçu avec succès de %s\n", user.prenom);
 
           envoyer_fichier_salon(users, &user, filepath, filesize, salons_name, salons_users);
         }
