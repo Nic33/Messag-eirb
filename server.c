@@ -207,7 +207,7 @@ void envoyer_fichier_salon(Utilisateur* users, Utilisateur* user, const char* fi
           //write(dest_fd, filesize, sizeof(long));
 
           // Lire et envoyer le fichier par morceaux
-          char buffer[1024];
+          char buffer[1];
           ssize_t bytes_read;
           long total_bytes_sent = 0;
 
@@ -328,10 +328,10 @@ void handle_file_transfer(int client_fd, Utilisateur* user, Utilisateur* users) 
     printf("Taille du fichier à envoyer: %ld octets\n", filesize);
 
     // Envoyer une indication que le message est un fichier
-    char file_message[256];
-    snprintf(file_message, sizeof(file_message), "file:%s", user->message);
+    char file_message[BUFFER_SIZE];
+    snprintf(file_message, sizeof(file_message), "%s", user->message);
     
-    printf("Envoi du fichier: %s\n", file_message);
+    printf("Envoie titre du fichier : %s\n", file_message);
  
     write(dest_fd, file_message, strlen(file_message));
 
@@ -339,26 +339,26 @@ void handle_file_transfer(int client_fd, Utilisateur* user, Utilisateur* users) 
     //write(dest_fd, &filesize, sizeof(long));
 
     // Lire et envoyer le fichier par morceaux
-    char buffer[1024];
+    char buffer[1];
     ssize_t bytes_read;
     long total_bytes_sent = 0;
 
     while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
-        ssize_t bytes_written = write(dest_fd, buffer, bytes_read);
-        if (bytes_written < 0) {
-            perror("Erreur lors de l'envoi du fichier");
-            fclose(file);
-            return;
-        }
+      ssize_t bytes_written = write(dest_fd, buffer, bytes_read);
+      if (bytes_written < 0) {
+        perror("Erreur lors de l'envoi du fichier");
+        fclose(file);
+        return;
+      }
 
-        total_bytes_sent += bytes_written;
-        printf("\nOctets envoyés: %ld/%ld\n", total_bytes_sent, filesize);
+      total_bytes_sent += bytes_written;
+      printf("\nOctets envoyés: %ld/%ld\n", total_bytes_sent, filesize);
     }
 
     if (total_bytes_sent == filesize) {
-        printf("Fichier %s envoyé avec succès à %s.\n", user->message, user->dest);
+      printf("Fichier %s envoyé avec succès à %s.\n", user->message, user->dest);
     } else {
-        printf("Erreur lors de l'envoi: seulement %ld/%ld octets envoyés.\n", total_bytes_sent, filesize);
+      printf("Erreur lors de l'envoi: seulement %ld/%ld octets envoyés.\n", total_bytes_sent, filesize);
     }
 
     fclose(file);
