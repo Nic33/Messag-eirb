@@ -34,10 +34,14 @@ typedef struct {
 
 void print_error(int result, char* s);
 
+
+int read_message_from_socket(int fd, char* buffer, int size);
+
+void write_on_socket(int fd, char* s);
+
 int read_int_from_socket(int fd);
-void read_message_from_socket(int fd, char* buffer, int size);
 
 void write_int_as_message(int fd, int val);
-void write_on_socket(int fd, char* s);
+
 
 #endif

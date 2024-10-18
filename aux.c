@@ -7,32 +7,19 @@ void print_error(int result, char* s) {
   }
 }
 
-int read_int_from_socket(int fd) {
-  int val;
-  int total_bytes_read = 0;
-  int bytes_read;
-  int size = sizeof(val);
-
-  while (total_bytes_read < size) {
-    bytes_read = read(fd, ((char*)&val) + total_bytes_read, size - total_bytes_read);
-    print_error(bytes_read, "read_int");
-    total_bytes_read += bytes_read;
-  }
-  
-  return val;
-}
-
-void read_message_from_socket(int fd, char* buffer, int size) {
+int read_message_from_socket(int fd, char* buffer, int size) {
   int total_bytes_read = 0;
   int bytes_read;
 
   while (total_bytes_read < size) {
     bytes_read = read(fd, buffer + total_bytes_read, size - total_bytes_read);
+    if (bytes_read == 0) return 0;
     print_error(bytes_read, "read_message");
     total_bytes_read += bytes_read;
   }
-}
 
+  return total_bytes_read;
+}
 
 void write_on_socket(int fd, char* s) {
   int size = strlen(s);
@@ -45,6 +32,22 @@ void write_on_socket(int fd, char* s) {
   }
 }
 
+int read_int_from_socket(int fd) {
+  int val;
+  int total_bytes_read = 0;
+  int bytes_read;
+  int size = sizeof(val);
+
+  while (total_bytes_read < size) {
+    bytes_read = read(fd, ((char*)&val) + total_bytes_read, size - total_bytes_read);
+    if (bytes_read == 0) return 0;
+    print_error(bytes_read, "read_int");
+    total_bytes_read += bytes_read;
+  }
+  
+  return val;
+}
+
 void write_int_as_message(int fd, int val) {
   int size = sizeof(val);
   int send = 0;
@@ -55,4 +58,3 @@ void write_int_as_message(int fd, int val) {
     send += temp_send;
   }
 }
-

@@ -1,23 +1,6 @@
 #include <aux.h>
 
-/**
- * @brief Le client est capable de :
- * - Se connecter a un server
- * - Créer un compte et se connecter
- * - Intérargir avec un autre utilisateur
- * - Rejoindre des salons
- * - Envoyer des fichiers
- * 
- * @param argc 
- * @param argv 
- * @return int 
- */
-
 int main(int argc, char const *argv[]) {
-
-    bool data = false;
-
-    FILE *file = NULL;
 
     int client_fd = socket(AF_INET, SOCK_STREAM, 0);
     print_error(client_fd, "socket"); 
@@ -30,8 +13,6 @@ int main(int argc, char const *argv[]) {
     int ret = connect(client_fd, (struct sockaddr *)&server_addr, sizeof(server_addr));
     print_error(ret, "connect");  
 
-    int identification = 0;
-
     struct pollfd fds[2];
     fds[0].fd = 0;
     fds[0].events = POLLIN;
@@ -43,14 +24,17 @@ int main(int argc, char const *argv[]) {
     user.nom = malloc(50 * sizeof(char));
     user.mdp = malloc(50 * sizeof(char));
     user.type = malloc(20 * sizeof(char));
-    user.message = malloc(256 * sizeof(char));
+    user.message = malloc(BUFFER_SIZE * sizeof(char));
     user.dest = malloc(50 * sizeof(char));
 
-    char input[256];
-    memset(input, 0, sizeof(input));
+    // Variables interaction terminal
+    char input[BUFFER_SIZE];
+    int identification = 0;
+
+    bool file_data = false;
+    FILE *file = NULL;
 
     while (1) {
-
         if(identification == 0){
             printf("\nQuitter tapez 'exit'\n");
             printf("Identification tapez '1'\n");
@@ -98,34 +82,48 @@ int main(int argc, char const *argv[]) {
                 }
                 strcpy(user.mdp, input);
 
-                strcpy(user.message, "");
-                strcpy(user.dest, "");
+                strcpy(user.message, "empty");
+                strcpy(user.dest, "empty");
 
-                size_t lengths[] = {strlen(user.prenom) + 1, strlen(user.nom) + 1, strlen(user.mdp) + 1, 
-                    strlen(user.type) + 1, strlen(user.message) + 1, strlen(user.dest) + 1};
+                // Octets envoyé au server
+                write_int_as_message(client_fd, strlen(user.prenom));
+                write_on_socket(client_fd, user.prenom);
 
-                write(client_fd, lengths, sizeof(lengths));
+                write_int_as_message(client_fd, strlen(user.nom));
+                write_on_socket(client_fd, user.nom);
 
-                write(client_fd, user.prenom, lengths[0]);
-                write(client_fd, user.nom, lengths[1]);
-                write(client_fd, user.mdp, lengths[2]);
-                write(client_fd, user.type, lengths[3]);
-                write(client_fd, user.message, lengths[4]);
-                write(client_fd, user.dest, lengths[5]);
-              
-                char buffer[1024];
-                ssize_t bytes_received = read(client_fd, buffer, sizeof(buffer));
-                if (bytes_received < 0) {
-                    perror("Erreur lors de la lecture de la réponse");
-                    close(client_fd);
-                    exit(EXIT_FAILURE);
+                write_int_as_message(client_fd, strlen(user.mdp));
+                write_on_socket(client_fd, user.mdp);
+
+                write_int_as_message(client_fd, strlen(user.type));
+                write_on_socket(client_fd, user.type);
+
+                write_int_as_message(client_fd, strlen(user.message));
+                write_on_socket(client_fd, user.message);
+
+                write_int_as_message(client_fd, strlen(user.dest));
+                write_on_socket(client_fd, user.dest);
+
+                // Octets reçu du server
+                int message_size = read_int_from_socket(client_fd);
+                
+
+                if (message_size <= 0 || message_size >= BUFFER_SIZE) {
+                    printf("Invalid message size: %d\n", message_size);
+                    break;
                 }
 
-                buffer[bytes_received] = '\0';
+                char* buffer = (char*)malloc(message_size + 1);
+                int read_status = read_message_from_socket(client_fd, buffer, message_size);
+                if (read_status <= 0) {
+                    printf("Server disconnected or error occurred.\n");
+                    free(buffer);
+                    break;
+                }
+                buffer[message_size] = '\0'; 
 
                 if (strcmp(buffer, "Connexion réussie") == 0) {
                     printf("Bienvenue %s !\n", user.prenom);
-
                     identification = 1;
 
                 } else if (strcmp(buffer, "Connexion échouée") == 0) {
@@ -133,11 +131,13 @@ int main(int argc, char const *argv[]) {
                 } else {
                     printf("Réponse inattendue du serveur : %s\n", buffer);
                 }
+
+                free(buffer);
             
             }else if (strcmp(input, "2") == 0) {
 
                 strcpy(user.type, "new");
-
+                
                 memset(input, 0, sizeof(input));
                 printf("Prénom : \n");
                 fgets(input, sizeof(input), stdin);
@@ -165,28 +165,55 @@ int main(int argc, char const *argv[]) {
                 }
                 strcpy(user.mdp, input);
 
-                strcpy(user.message, "");
-                strcpy(user.dest, "");
+                strcpy(user.message, "empty");
+                strcpy(user.dest, "empty");
 
-                size_t lengths[] = {strlen(user.prenom) + 1, strlen(user.nom) + 1, strlen(user.mdp) + 1, 
-                    strlen(user.type) + 1, strlen(user.message) + 1, strlen(user.dest) + 1};
+                // Octets envoyé au server
+                write_int_as_message(client_fd, strlen(user.prenom));
+                write_on_socket(client_fd, user.prenom);
 
-                // Envoi des longueurs
-                write(client_fd, lengths, sizeof(lengths));
-                // Envoi des chaînes de caractères
-                write(client_fd, user.prenom, lengths[0]);
-                write(client_fd, user.nom, lengths[1]);
-                write(client_fd, user.mdp, lengths[2]);
-                write(client_fd, user.type, lengths[3]);
-                write(client_fd, user.message, lengths[4]);
-                write(client_fd, user.dest, lengths[5]);
+                write_int_as_message(client_fd, strlen(user.nom));
+                write_on_socket(client_fd, user.nom);
+
+                write_int_as_message(client_fd, strlen(user.mdp));
+                write_on_socket(client_fd, user.mdp);
+
+                write_int_as_message(client_fd, strlen(user.type));
+                write_on_socket(client_fd, user.type);
+
+                write_int_as_message(client_fd, strlen(user.message));
+                write_on_socket(client_fd, user.message);
+
+                write_int_as_message(client_fd, strlen(user.dest));
+                write_on_socket(client_fd, user.dest);
+
+                // Octets reçu du server
+                int message_size = read_int_from_socket(client_fd);
                 
+
+                if (message_size <= 0 || message_size >= BUFFER_SIZE) {
+                    printf("Invalid message size: %d\n", message_size);
+                    break;
+                }
+
+                char* buffer = (char*)malloc(message_size + 1);
+                int read_status = read_message_from_socket(client_fd, buffer, message_size);
+                if (read_status <= 0) {
+                    printf("Server disconnected or error occurred.\n");
+                    free(buffer);
+                    break;
+                }
+                buffer[message_size] = '\0'; 
+                printf("%s\n", buffer);
+
+                free(buffer);
+            
             }else{
                 printf("Valeur non reconnue\n");
             }
         }
         else if (identification == 1){
-            
+
             printf("\nQuitter tapez 'exit'\n");
             printf("Info utilisateurs tapez 'info'\n");
             printf("Info salons tapez 'info salon'\n\n");
@@ -207,16 +234,18 @@ int main(int argc, char const *argv[]) {
 
                 strcpy(user.type, "deconnexion");
 
-                size_t lengths[] = {strlen(user.prenom) + 1, strlen(user.nom) + 1, strlen(user.mdp) + 1, 
-                    strlen(user.type) + 1, strlen(user.message) + 1, strlen(user.dest) + 1};
-
-                write(client_fd, lengths, sizeof(lengths));
-                write(client_fd, user.prenom, lengths[0]);
-                write(client_fd, user.nom, lengths[1]);
-                write(client_fd, user.mdp, lengths[2]);
-                write(client_fd, user.type, lengths[3]);
-                write(client_fd, user.message, lengths[4]);
-                write(client_fd, user.dest, lengths[5]);
+                write_int_as_message(client_fd, strlen(user.prenom));
+                write_on_socket(client_fd, user.prenom);
+                write_int_as_message(client_fd, strlen(user.nom));
+                write_on_socket(client_fd, user.nom);
+                write_int_as_message(client_fd, strlen(user.mdp));
+                write_on_socket(client_fd, user.mdp);
+                write_int_as_message(client_fd, strlen(user.type));
+                write_on_socket(client_fd, user.type);
+                write_int_as_message(client_fd, strlen(user.message));
+                write_on_socket(client_fd, user.message);
+                write_int_as_message(client_fd, strlen(user.dest));
+                write_on_socket(client_fd, user.dest);
             
                 free(user.prenom);
                 free(user.nom);
@@ -227,55 +256,78 @@ int main(int argc, char const *argv[]) {
 
                 break;  
 
-            }if (strcmp(input, "info") == 0) {
+            }else if (strcmp(input, "info") == 0) {
 
                 strcpy(user.type, "info");
 
-                size_t lengths[] = {strlen(user.prenom) + 1, strlen(user.nom) + 1, strlen(user.mdp) + 1, 
-                    strlen(user.type) + 1, strlen(user.message) + 1, strlen(user.dest) + 1};
+                write_int_as_message(client_fd, strlen(user.prenom));
+                write_on_socket(client_fd, user.prenom);
+                write_int_as_message(client_fd, strlen(user.nom));
+                write_on_socket(client_fd, user.nom);
+                write_int_as_message(client_fd, strlen(user.mdp));
+                write_on_socket(client_fd, user.mdp);
+                write_int_as_message(client_fd, strlen(user.type));
+                write_on_socket(client_fd, user.type);
+                write_int_as_message(client_fd, strlen(user.message));
+                write_on_socket(client_fd, user.message);
+                write_int_as_message(client_fd, strlen(user.dest));
+                write_on_socket(client_fd, user.dest);
 
-                write(client_fd, lengths, sizeof(lengths));
-                write(client_fd, user.prenom, lengths[0]);
-                write(client_fd, user.nom, lengths[1]);
-                write(client_fd, user.mdp, lengths[2]);
-                write(client_fd, user.type, lengths[3]);
-                write(client_fd, user.message, lengths[4]);
-                write(client_fd, user.dest, lengths[5]);
-
-                char buffer[1024];
-                size_t bytes_received = read(client_fd, buffer, sizeof(buffer));
-                if (bytes_received < 0) {
-                    perror("Erreur lors de la lecture de la réponse");
-                    close(client_fd);
-                    exit(EXIT_FAILURE);
+                // Octets reçu du server
+                int message_size = read_int_from_socket(client_fd);
+                if (message_size <= 0 || message_size >= BUFFER_SIZE) {
+                    printf("Invalid message size: %d\n", message_size);
+                    break;
                 }
-                buffer[bytes_received] = '\0';
+
+                char* buffer = (char*)malloc(message_size + 1);
+                int read_status = read_message_from_socket(client_fd, buffer, message_size);
+                if (read_status <= 0) {
+                    printf("Server disconnected or error occurred.\n");
+                    free(buffer);
+                    break;
+                }
+                buffer[message_size] = '\0'; 
                 printf("\n%s\n", buffer);
+
+                free(buffer);
 
             }else if (strcmp(input, "info salon") == 0) {
 
-                strcpy(user.type, "info_salon");
+                strcpy(user.type, "info salon");
 
-                size_t lengths[] = {strlen(user.prenom) + 1, strlen(user.nom) + 1, strlen(user.mdp) + 1, 
-                    strlen(user.type) + 1, strlen(user.message) + 1, strlen(user.dest) + 1};
+                write_int_as_message(client_fd, strlen(user.prenom));
+                write_on_socket(client_fd, user.prenom);
+                write_int_as_message(client_fd, strlen(user.nom));
+                write_on_socket(client_fd, user.nom);
+                write_int_as_message(client_fd, strlen(user.mdp));
+                write_on_socket(client_fd, user.mdp);
+                write_int_as_message(client_fd, strlen(user.type));
+                write_on_socket(client_fd, user.type);
+                write_int_as_message(client_fd, strlen(user.message));
+                write_on_socket(client_fd, user.message);
+                write_int_as_message(client_fd, strlen(user.dest));
+                write_on_socket(client_fd, user.dest);
 
-                write(client_fd, lengths, sizeof(lengths));
-                write(client_fd, user.prenom, lengths[0]);
-                write(client_fd, user.nom, lengths[1]);
-                write(client_fd, user.mdp, lengths[2]);
-                write(client_fd, user.type, lengths[3]);
-                write(client_fd, user.message, lengths[4]);
-                write(client_fd, user.dest, lengths[5]);
+                int message_size = read_int_from_socket(client_fd);
+                
 
-                char buffer[1024];
-                size_t bytes_received = read(client_fd, buffer, sizeof(buffer));
-                if (bytes_received < 0) {
-                    perror("Erreur lors de la lecture de la réponse");
-                    close(client_fd);
-                    exit(EXIT_FAILURE);
+                if (message_size <= 0 || message_size >= BUFFER_SIZE) {
+                    printf("Invalid message size: %d\n", message_size);
+                    break;
                 }
-                buffer[bytes_received] = '\0';
+
+                char* buffer = (char*)malloc(message_size + 1);
+                int read_status = read_message_from_socket(client_fd, buffer, message_size);
+                if (read_status <= 0) {
+                    printf("Server disconnected or error occurred.\n");
+                    free(buffer);
+                    break;
+                }
+                buffer[message_size] = '\0'; 
                 printf("\n%s\n", buffer);
+
+                free(buffer);
 
             }else if (strcmp(input, "1") == 0) {
 
@@ -317,22 +369,23 @@ int main(int argc, char const *argv[]) {
                 if (len > 0 && input[len - 1] == '\n') {
                     input[len - 1] = '\0';
                 }
-                strcpy(user.type, "new_salon");
+                strcpy(user.type, "new salon");
 
-                strcpy(user.message, "");
+                strcpy(user.message, "empty");
                 strcpy(user.dest, input);
 
-                size_t lengths[] = {strlen(user.prenom) + 1, strlen(user.nom) + 1, strlen(user.mdp) + 1, 
-                    strlen(user.type) + 1, strlen(user.message) + 1, strlen(user.dest) + 1};
-
-                write(client_fd, lengths, sizeof(lengths));
-
-                write(client_fd, user.prenom, lengths[0]);
-                write(client_fd, user.nom, lengths[1]);
-                write(client_fd, user.mdp, lengths[2]);
-                write(client_fd, user.type, lengths[3]);
-                write(client_fd, user.message, lengths[4]);
-                write(client_fd, user.dest, lengths[5]);
+                write_int_as_message(client_fd, strlen(user.prenom));
+                write_on_socket(client_fd, user.prenom);
+                write_int_as_message(client_fd, strlen(user.nom));
+                write_on_socket(client_fd, user.nom);
+                write_int_as_message(client_fd, strlen(user.mdp));
+                write_on_socket(client_fd, user.mdp);
+                write_int_as_message(client_fd, strlen(user.type));
+                write_on_socket(client_fd, user.type);
+                write_int_as_message(client_fd, strlen(user.message));
+                write_on_socket(client_fd, user.message);
+                write_int_as_message(client_fd, strlen(user.dest));
+                write_on_socket(client_fd, user.dest);
                 
             }else if (strcmp(input, "4") == 0) {
 
@@ -344,33 +397,42 @@ int main(int argc, char const *argv[]) {
                 if (len > 0 && input[len - 1] == '\n') {
                     input[len - 1] = '\0';
                 }
-                strcpy(user.type, "join_salon"); 
+                strcpy(user.type, "join salon"); 
 
-                strcpy(user.message, "");
+                strcpy(user.message, "empty");
                 strcpy(user.dest, input);
 
-                size_t lengths[] = {strlen(user.prenom) + 1, strlen(user.nom) + 1, strlen(user.mdp) + 1, 
-                    strlen(user.type) + 1, strlen(user.message) + 1, strlen(user.dest) + 1};
+                write_int_as_message(client_fd, strlen(user.prenom));
+                write_on_socket(client_fd, user.prenom);
+                write_int_as_message(client_fd, strlen(user.nom));
+                write_on_socket(client_fd, user.nom);
+                write_int_as_message(client_fd, strlen(user.mdp));
+                write_on_socket(client_fd, user.mdp);
+                write_int_as_message(client_fd, strlen(user.type));
+                write_on_socket(client_fd, user.type);
+                write_int_as_message(client_fd, strlen(user.message));
+                write_on_socket(client_fd, user.message);
+                write_int_as_message(client_fd, strlen(user.dest));
+                write_on_socket(client_fd, user.dest);
 
-                write(client_fd, lengths, sizeof(lengths));
-
-                write(client_fd, user.prenom, lengths[0]);
-                write(client_fd, user.nom, lengths[1]);
-                write(client_fd, user.mdp, lengths[2]);
-                write(client_fd, user.type, lengths[3]);
-                write(client_fd, user.message, lengths[4]);
-                write(client_fd, user.dest, lengths[5]);
-
-                char buffer[1024];
-                ssize_t bytes_received = read(client_fd, buffer, sizeof(buffer));
-                if (bytes_received < 0) {
-                    perror("Erreur lors de la lecture de la réponse");
-                    close(client_fd);
-                    exit(EXIT_FAILURE);
+                // Octets reçu du server
+                int message_size = read_int_from_socket(client_fd);
+                if (message_size <= 0 || message_size >= BUFFER_SIZE) {
+                    printf("Invalid message size: %d\n", message_size);
+                    break;
                 }
 
-                buffer[bytes_received] = '\0';
-                printf("%s\n", buffer);
+                char* buffer = (char*)malloc(message_size + 1);
+                int read_status = read_message_from_socket(client_fd, buffer, message_size);
+                if (read_status <= 0) {
+                    printf("Server disconnected or error occurred.\n");
+                    free(buffer);
+                    break;
+                }
+                buffer[message_size] = '\0'; 
+                printf("\n%s\n", buffer);
+
+                free(buffer);
 
                 if (strcmp(buffer, "Pas de salon") == 0) {
                     printf("\nCe salon n'existe pas\n");                
@@ -384,6 +446,7 @@ int main(int argc, char const *argv[]) {
             }else{
                 printf("Valeur non reconnue\n");
             }
+
         }else if(identification == 2){
 
             int poll_count = poll(fds, 2, -1);
@@ -402,37 +465,42 @@ int main(int argc, char const *argv[]) {
 
                     if (strcmp(input, "menu") == 0) {
                         identification = 1;
-
                     }
                     else {
-
-                        size_t lengths[] = {strlen(user.prenom) + 1, strlen(user.nom) + 1, strlen(user.mdp) + 1, 
-                            strlen(user.type) + 1, strlen(user.message) + 1, strlen(user.dest) + 1};
-
-                        write(client_fd, lengths, sizeof(lengths));
-
-                        write(client_fd, user.prenom, lengths[0]);
-                        write(client_fd, user.nom, lengths[1]);
-                        write(client_fd, user.mdp, lengths[2]);
-                        write(client_fd, user.type, lengths[3]);
-                        write(client_fd, user.message, lengths[4]);
-                        write(client_fd, user.dest, lengths[5]);
-                    
+                        write_int_as_message(client_fd, strlen(user.prenom));
+                        write_on_socket(client_fd, user.prenom);
+                        write_int_as_message(client_fd, strlen(user.nom));
+                        write_on_socket(client_fd, user.nom);
+                        write_int_as_message(client_fd, strlen(user.mdp));
+                        write_on_socket(client_fd, user.mdp);
+                        write_int_as_message(client_fd, strlen(user.type));
+                        write_on_socket(client_fd, user.type);
+                        write_int_as_message(client_fd, strlen(user.message));
+                        write_on_socket(client_fd, user.message);
+                        write_int_as_message(client_fd, strlen(user.dest));
+                        write_on_socket(client_fd, user.dest);
                     }
                 }
                 
                 else if (fds[1].revents & POLLIN) {
-                    char message[BUFFER_SIZE];
 
-                    ssize_t message_bytes = read(fds[1].fd, message, sizeof(message));
-                    if (message_bytes <= 0) {
-                        printf("La personne s'est déconnectée\n");
-                        identification = 1;
+                    int message_size = read_int_from_socket(client_fd);
+                    if (message_size <= 0 || message_size >= BUFFER_SIZE) {
+                        printf("Invalid message size: %d\n", message_size);
+                        break;
                     }
 
-                    message[message_bytes] = '\0';  
+                    char* buffer = (char*)malloc(message_size + 1);
+                    int read_status = read_message_from_socket(client_fd, buffer, message_size);
+                    if (read_status <= 0) {
+                        printf("Server disconnected or error occurred.\n");
+                        free(buffer);
+                        break;
+                    }
+                    buffer[message_size] = '\0'; 
+                    printf("%s\n", buffer);
 
-                    printf("%s\n", message);
+                    free(buffer);
 
                 }
             }
@@ -442,7 +510,7 @@ int main(int argc, char const *argv[]) {
             if (poll_count > 0) {
 
                 if (fds[0].revents & POLLIN) {
-                    strcpy(user.type, "message_salon");
+                    strcpy(user.type, "message salon");
 
                     memset(input, 0, sizeof(input));
                     fgets(input, sizeof(input), stdin);
@@ -454,45 +522,45 @@ int main(int argc, char const *argv[]) {
 
                     if (strcmp(input, "menu") == 0) {
 
-                        strcpy(user.type, "dec_salon");
-
-                        size_t lengths[] = {strlen(user.prenom) + 1, strlen(user.nom) + 1, strlen(user.mdp) + 1, 
-                            strlen(user.type) + 1, strlen(user.message) + 1, strlen(user.dest) + 1};
-
-                        write(client_fd, lengths, sizeof(lengths));
-                        write(client_fd, user.prenom, lengths[0]);
-                        write(client_fd, user.nom, lengths[1]);
-                        write(client_fd, user.mdp, lengths[2]);
-                        write(client_fd, user.type, lengths[3]);
-                        write(client_fd, user.message, lengths[4]);
-                        write(client_fd, user.dest, lengths[5]);
-                    
+                        strcpy(user.type, "dec salon");
                         identification = 1;
 
-                    }else {
-                        size_t lengths[] = {strlen(user.prenom) + 1, strlen(user.nom) + 1, strlen(user.mdp) + 1, 
-                            strlen(user.type) + 1, strlen(user.message) + 1, strlen(user.dest) + 1};
-
-                        write(client_fd, lengths, sizeof(lengths));
-                        write(client_fd, user.prenom, lengths[0]);
-                        write(client_fd, user.nom, lengths[1]);
-                        write(client_fd, user.mdp, lengths[2]);
-                        write(client_fd, user.type, lengths[3]);
-                        write(client_fd, user.message, lengths[4]);
-                        write(client_fd, user.dest, lengths[5]);
                     }
+
+                    write_int_as_message(client_fd, strlen(user.prenom));
+                    write_on_socket(client_fd, user.prenom);
+                    write_int_as_message(client_fd, strlen(user.nom));
+                    write_on_socket(client_fd, user.nom);
+                    write_int_as_message(client_fd, strlen(user.mdp));
+                    write_on_socket(client_fd, user.mdp);
+                    write_int_as_message(client_fd, strlen(user.type));
+                    write_on_socket(client_fd, user.type);
+                    write_int_as_message(client_fd, strlen(user.message));
+                    write_on_socket(client_fd, user.message);
+                    write_int_as_message(client_fd, strlen(user.dest));
+                    write_on_socket(client_fd, user.dest);
                 }
                 
                 else if (fds[1].revents & POLLIN) {
-                    char message[256];
 
-                    ssize_t message_bytes = read(fds[1].fd, message, sizeof(message));
-                    if (message_bytes <= 0) {
-                        printf("La personne s'est déconnecté\n");
-                        identification = 1;
+                    int message_size = read_int_from_socket(client_fd);
+                    if (message_size <= 0 || message_size >= BUFFER_SIZE) {
+                        printf("Invalid message size: %d\n", message_size);
+                        break;
                     }
-                    message[message_bytes] = '\0';  
-                    printf("%s\n", message);
+
+                    char* buffer = (char*)malloc(message_size + 1);
+                    int read_status = read_message_from_socket(client_fd, buffer, message_size);
+                    if (read_status <= 0) {
+                        printf("Server disconnected or error occurred.\n");
+                        free(buffer);
+                        break;
+                    }
+                    buffer[message_size] = '\0'; 
+                    printf("%s\n", buffer);
+
+                    free(buffer);
+
                 }
             }
         }else if(identification == 4){ // fichier
@@ -518,113 +586,121 @@ int main(int argc, char const *argv[]) {
                         
                         char *filepath = input;
 
-                        FILE *file = fopen(filepath, "rb");
+                        file = fopen(filepath, "rb");
                         if (file == NULL) {
                             perror("Erreur lors de l'ouverture du fichier");
                             continue; 
                         }
 
                         fseek(file, 0L, SEEK_END);
+                        long taille = ftell(file);
                         rewind(file);
 
-                        size_t lengths[] = {
-                            strlen(user.prenom) + 1,
-                            strlen(user.nom) + 1,
-                            strlen(user.mdp) + 1,
-                            strlen(user.type) + 1,
-                            strlen(filepath) + 1, 
-                            strlen(user.dest) + 1
-                        };
+                        write_int_as_message(client_fd, strlen(user.prenom));
+                        write_on_socket(client_fd, user.prenom);
+                        write_int_as_message(client_fd, strlen(user.nom));
+                        write_on_socket(client_fd, user.nom);
+                        write_int_as_message(client_fd, strlen(user.mdp));
+                        write_on_socket(client_fd, user.mdp);
+                        write_int_as_message(client_fd, strlen(user.type));
+                        write_on_socket(client_fd, user.type);
+                        write_int_as_message(client_fd, strlen(filepath));
+                        write_on_socket(client_fd, filepath);
+                        write_int_as_message(client_fd, strlen(user.dest));
+                        write_on_socket(client_fd, user.dest);
 
-                        write(client_fd, lengths, sizeof(lengths));
+                        char buffer[taille];
+                        int message_size;
 
-                        write(client_fd, user.prenom, lengths[0]);
-                        write(client_fd, user.nom, lengths[1]);
-                        write(client_fd, user.mdp, lengths[2]);
-                        write(client_fd, user.type, lengths[3]);
-                        write(client_fd, filepath, lengths[4]);
-                        write(client_fd, user.dest, lengths[5]);
+                        while ((message_size = fread(buffer, sizeof(char), BUFFER_SIZE, file)) > 0) {
 
-                        char buffer[1];
-                        size_t bytes_read;
-
-                        lengths[4] = strlen(buffer);
-
-                        while ((bytes_read = fread(buffer, 1, 1, file)) > 0) {
-
-                            write(client_fd, lengths, sizeof(lengths));
-
-                            write(client_fd, user.prenom, lengths[0]);
-                            write(client_fd, user.nom, lengths[1]);
-                            write(client_fd, user.mdp, lengths[2]);
-                            write(client_fd, user.type, lengths[3]);
-                            write(client_fd, buffer, lengths[4]);
-                            write(client_fd, user.dest, lengths[5]);
+                            write_int_as_message(client_fd, strlen(user.prenom));
+                            write_on_socket(client_fd, user.prenom);
+                            write_int_as_message(client_fd, strlen(user.nom));
+                            write_on_socket(client_fd, user.nom);
+                            write_int_as_message(client_fd, strlen(user.mdp));
+                            write_on_socket(client_fd, user.mdp);
+                            write_int_as_message(client_fd, strlen(user.type));
+                            write_on_socket(client_fd, user.type);
+                            write_int_as_message(client_fd, strlen(buffer));
+                            write_on_socket(client_fd, buffer);
+                            write_int_as_message(client_fd, strlen(user.dest));
+                            write_on_socket(client_fd, user.dest);
 
                         }
 
-                        printf("bytes_read : %zd\n", bytes_read);
+                        identification = 1;
 
                         fclose(file);
                         printf("Fichier envoyé avec succès.\n");
                     }
                 }else if (fds[1].revents & POLLIN) {
                     
-                    char message[8];
+                    if (file_data == false){ // Création du fichier avec le bon nom
 
-                    if (data == false){
-
-                        ssize_t message_bytes = read(fds[1].fd, message, sizeof(message));
-                        if (message_bytes <= 0) {
-                            printf("La personne s'est déconnectée\n");
-                            identification = 1;
+                        int message_size = read_int_from_socket(fds[1].fd);
+                        if (message_size <= 0 || message_size >= BUFFER_SIZE) {
+                            printf("Invalid message size: %d\n", message_size);
+                            break;
                         }
 
-                        message[message_bytes] = '\0';  
-                        
-                        char *filename = message; 
-                        filename = strtok(filename, "\n");
+                        char* buffer = (char*)malloc(message_size + 1);
+                        int read_status = read_message_from_socket(fds[1].fd, buffer, message_size);
+                        if (read_status <= 0) {
+                            printf("Server disconnected or error occurred.\n");
+                            free(buffer);
+                            break;
+                        }
+                        buffer[message_size] = '\0'; 
 
-                        FILE *file = fopen(filename, "wb");
+                        file = fopen(buffer, "wb");
                         if (file == NULL) {
                             perror("Erreur lors de la création du fichier");
                         }
 
-                        printf("Création du fichier : %s\n", filename);
+                        printf("Création du fichier : %s\n", buffer);
 
-                        data = true;
+                        file_data = true;
 
-                    }else{
-                        long filesize = 11;
+                        free(buffer);
 
-                        printf("\nTaille du fichier à recevoir: %ld octets\n", filesize);
+                    } else {
 
-                        char file_buffer[1];
-                        ssize_t bytes_read;
-                        long total_bytes_read = 0;
-                        while (total_bytes_read < filesize && (bytes_read = read(fds[1].fd, file_buffer, sizeof(file_buffer))) > 0) {
-                            printf("Octets lus: %zd\n", bytes_read);
-                            fwrite(file_buffer, 1, bytes_read, file);
-                            total_bytes_read += bytes_read;
-                            printf("Total des octets reçus: %ld/%ld\n", total_bytes_read, filesize);
-                        }
+                        int message_size;
 
-                        if (total_bytes_read == filesize) {
-                            printf("Fichier reçu avec succès.\n");
-                        } else {
-                            printf("Erreur : fichier incomplet reçu. Seulement %ld/%ld octets reçus.\n", total_bytes_read, filesize);
+                        while ((message_size = read_int_from_socket(fds[1].fd)) > 0) {
+
+                            char* buffer = (char*)malloc(message_size + 1);
+                            int read_status = read_message_from_socket(fds[1].fd, buffer, message_size);
+                            if (read_status <= 0) {
+                                printf("Server disconnected or error occurred.\n");
+                                free(buffer);
+                                break;
+                            }
+                            buffer[message_size] = '\0'; 
+
+                            printf("Octets lus: %d\n", message_size);
+
+                            size_t bytesWritten = fwrite(buffer, sizeof(char), message_size, file);
+                            if (bytesWritten != message_size) {
+                                perror("Erreur lors de l'écriture dans le fichier");
+                            } else {
+                                printf("Écriture réussie de %zu octets\n", bytesWritten);
+                                break;
+                            }
+
+                            free(buffer);
                         }
 
                         fclose(file);
 
                         identification = 1;
+                        file_data = false;
                     }
-
                 }
             }
         }
     }
-
     close(client_fd);  
     return 0;
 }
