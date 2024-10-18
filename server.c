@@ -1,7 +1,4 @@
 #include <aux.h>
-#include <ctype.h>  
-#include <sys/poll.h>
-#include <stdbool.h>
 
 // Ajoute un utilisateur au fichier
 void add_user_to_file(char *prenom, char *nom, char *password) {
@@ -304,65 +301,6 @@ int find_client_by_name(Utilisateur* users,const char* dest) {
  * @param user 
  * @param users 
  */
-void handle_file_transfer(int client_fd, Utilisateur* user, Utilisateur* users) {
-
-    int dest_fd = find_client_by_name(users, user->dest);
-
-    if (dest_fd == -1) {
-        printf("Client destinataire non trouvé: %s\n", user->dest);
-        return;
-    }
-
-    // Ouvrir le fichier à envoyer
-    FILE *file = fopen(user->message, "rb"); 
-    if (file == NULL) {
-        perror("Erreur lors de l'ouverture du fichier");
-        return;
-    }
-
-    // Obtenir la taille du fichier
-    fseek(file, 0L, SEEK_END);
-    long filesize = ftell(file);
-    rewind(file);
-
-    printf("Taille du fichier à envoyer: %ld octets\n", filesize);
-
-    // Envoyer une indication que le message est un fichier
-    char file_message[BUFFER_SIZE];
-    snprintf(file_message, sizeof(file_message), "%s", user->message);
-    
-    printf("Envoie titre du fichier : %s\n", file_message);
- 
-    write(dest_fd, file_message, strlen(file_message));
-
-    // Envoyer la taille du fichier
-    //write(dest_fd, &filesize, sizeof(long));
-
-    // Lire et envoyer le fichier par morceaux
-    char buffer[1];
-    ssize_t bytes_read;
-    long total_bytes_sent = 0;
-
-    while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
-      ssize_t bytes_written = write(dest_fd, buffer, bytes_read);
-      if (bytes_written < 0) {
-        perror("Erreur lors de l'envoi du fichier");
-        fclose(file);
-        return;
-      }
-
-      total_bytes_sent += bytes_written;
-      printf("\nOctets envoyés: %ld/%ld\n", total_bytes_sent, filesize);
-    }
-
-    if (total_bytes_sent == filesize) {
-      printf("Fichier %s envoyé avec succès à %s.\n", user->message, user->dest);
-    } else {
-      printf("Erreur lors de l'envoi: seulement %ld/%ld octets envoyés.\n", total_bytes_sent, filesize);
-    }
-
-    fclose(file);
-}
 
 
 int main(int argc, char const *argv[]) {
@@ -518,9 +456,12 @@ int main(int argc, char const *argv[]) {
           envoyer_message_a_utilisateur(users, &user);
         }
         else if (strcmp(user.type, "file") == 0) {
-          handle_file_transfer(client_fd, &user, users);
-          
-        }else if (strcmp(user.type, "file_salon") == 0) {
+
+          int dest_fd = find_client_by_name(users, user.dest);
+          write(dest_fd, user.message, strlen(user.message));
+
+        }
+        else if (strcmp(user.type, "file_salon") == 0) {
 
           char filepath[256];
           strcpy(filepath, user.message);
@@ -628,7 +569,7 @@ int main(int argc, char const *argv[]) {
           } else {
               printf("Le salon %s n'existe pas.\n", user.dest);
           }
-      }
+        }
 
         else if (strcmp(user.type, "dec_salon") == 0){
           int salon_trouve = -1;

@@ -1,9 +1,24 @@
 #include <aux.h>
-#include <ctype.h>  
-#include <sys/poll.h>
-#include <termios.h> 
+
+/**
+ * @brief Le client est capable de :
+ * - Se connecter a un server
+ * - Créer un compte et se connecter
+ * - Intérargir avec un autre utilisateur
+ * - Rejoindre des salons
+ * - Envoyer des fichiers
+ * 
+ * @param argc 
+ * @param argv 
+ * @return int 
+ */
 
 int main(int argc, char const *argv[]) {
+
+    bool data = false;
+
+    FILE *file = NULL;
+
     int client_fd = socket(AF_INET, SOCK_STREAM, 0);
     print_error(client_fd, "socket"); 
 
@@ -532,61 +547,78 @@ int main(int argc, char const *argv[]) {
 
                         char buffer[1];
                         size_t bytes_read;
-                        while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
-                            write(client_fd, buffer, bytes_read);
+
+                        lengths[4] = strlen(buffer);
+
+                        while ((bytes_read = fread(buffer, 1, 1, file)) > 0) {
+
+                            write(client_fd, lengths, sizeof(lengths));
+
+                            write(client_fd, user.prenom, lengths[0]);
+                            write(client_fd, user.nom, lengths[1]);
+                            write(client_fd, user.mdp, lengths[2]);
+                            write(client_fd, user.type, lengths[3]);
+                            write(client_fd, buffer, lengths[4]);
+                            write(client_fd, user.dest, lengths[5]);
+
                         }
+
+                        printf("bytes_read : %zd\n", bytes_read);
 
                         fclose(file);
                         printf("Fichier envoyé avec succès.\n");
-
-                        identification = 1;
                     }
                 }else if (fds[1].revents & POLLIN) {
                     
                     char message[8];
 
-                    ssize_t message_bytes = read(fds[1].fd, message, sizeof(message));
-                    if (message_bytes <= 0) {
-                        printf("La personne s'est déconnectée\n");
+                    if (data == false){
+
+                        ssize_t message_bytes = read(fds[1].fd, message, sizeof(message));
+                        if (message_bytes <= 0) {
+                            printf("La personne s'est déconnectée\n");
+                            identification = 1;
+                        }
+
+                        message[message_bytes] = '\0';  
+                        
+                        char *filename = message; 
+                        filename = strtok(filename, "\n");
+
+                        FILE *file = fopen(filename, "wb");
+                        if (file == NULL) {
+                            perror("Erreur lors de la création du fichier");
+                        }
+
+                        printf("Création du fichier : %s\n", filename);
+
+                        data = true;
+
+                    }else{
+                        long filesize = 11;
+
+                        printf("\nTaille du fichier à recevoir: %ld octets\n", filesize);
+
+                        char file_buffer[1];
+                        ssize_t bytes_read;
+                        long total_bytes_read = 0;
+                        while (total_bytes_read < filesize && (bytes_read = read(fds[1].fd, file_buffer, sizeof(file_buffer))) > 0) {
+                            printf("Octets lus: %zd\n", bytes_read);
+                            fwrite(file_buffer, 1, bytes_read, file);
+                            total_bytes_read += bytes_read;
+                            printf("Total des octets reçus: %ld/%ld\n", total_bytes_read, filesize);
+                        }
+
+                        if (total_bytes_read == filesize) {
+                            printf("Fichier reçu avec succès.\n");
+                        } else {
+                            printf("Erreur : fichier incomplet reçu. Seulement %ld/%ld octets reçus.\n", total_bytes_read, filesize);
+                        }
+
+                        fclose(file);
+
                         identification = 1;
                     }
-
-                    message[message_bytes] = '\0';  
-                        
-                    char *filename = message; 
-                    filename = strtok(filename, "\n");
-
-                    FILE *file = fopen(filename, "wb");
-                    if (file == NULL) {
-                        perror("Erreur lors de la création du fichier");
-                    }
-
-                    printf("Création du fichier test : %s\n", filename);
-
-                    // Lire la taille du fichier
-                    long filesize = 11;
-
-                    printf("\nTaille du fichier à recevoir: %ld octets\n", filesize);
-
-                    char file_buffer[1];
-                    ssize_t bytes_read;
-                    long total_bytes_read = 0;
-                    while (total_bytes_read < filesize && (bytes_read = read(fds[1].fd, file_buffer, sizeof(file_buffer))) > 0) {
-                        printf("Octets lus: %zd\n", bytes_read);
-                        fwrite(file_buffer, 1, bytes_read, file);
-                        total_bytes_read += bytes_read;
-                        printf("Total des octets reçus: %ld/%ld\n", total_bytes_read, filesize);
-                    }
-
-                    if (total_bytes_read == filesize) {
-                        printf("Fichier %s reçu avec succès.\n", filename);
-                    } else {
-                        printf("Erreur : fichier incomplet reçu. Seulement %ld/%ld octets reçus.\n", total_bytes_read, filesize);
-                    }
-
-                    fclose(file);
-
-                    identification = 1;
 
                 }
             }
