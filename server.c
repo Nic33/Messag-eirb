@@ -1,5 +1,12 @@
 #include <aux.h>
 
+/**
+ * @brief Libère la socket associée à un utilisateur et réinitialise ses informations.
+ * 
+ * @param users Tableau d'utilisateurs.
+ * @param socket_fd Descripteur de la socket à libérer.
+ */
+
 void liberer_socket(Utilisateur* users, int socket_fd) {
   for (int i = 0; i < MAX_FDS; i++) {
     if (users[i].socket_fd == socket_fd) {
@@ -13,6 +20,15 @@ void liberer_socket(Utilisateur* users, int socket_fd) {
     }
   }
 }
+
+/**
+ * @brief Ajoute un utilisateur au fichier utilisateur.
+ * 
+ * @param prenom Prénom de l'utilisateur.
+ * @param nom Nom de l'utilisateur.
+ * @param password Mot de passe de l'utilisateur.
+ * @return Retourne `true` en cas de succès, `false` sinon.
+ */
 
 bool add_user_to_file(char *prenom, char *nom, char *password) {
 
@@ -30,6 +46,14 @@ bool add_user_to_file(char *prenom, char *nom, char *password) {
     return true;
 }
 
+/**
+ * @brief Vérifie si un utilisateur existe dans le fichier utilisateur.
+ * 
+ * @param prenom Prénom de l'utilisateur.
+ * @param nom Nom de l'utilisateur.
+ * @param password Mot de passe de l'utilisateur.
+ * @return Retourne `1` si l'utilisateur existe, `0` sinon.
+ */
 int verify_user_in_file(const char *prenom, const char *nom, const char *password) {
   FILE *file = fopen(USER_FILE, "r"); 
   if (file == NULL) {
@@ -60,6 +84,13 @@ int verify_user_in_file(const char *prenom, const char *nom, const char *passwor
   return 0; 
 }
 
+/**
+ * @brief Affiche la liste des utilisateurs actuellement connectés à l'exception d'un utilisateur spécifique.
+ * 
+ * @param users Tableau d'utilisateurs.
+ * @param socket_fd Descripteur de la socket de l'utilisateur courant.
+ * @param prenom Prénom de l'utilisateur courant.
+ */
 void afficher_utilisateurs_connectes(Utilisateur* users, int socket_fd, char *prenom) {
     printf("\n--- Utilisateurs connectés ---\n");
     
@@ -99,6 +130,14 @@ void afficher_utilisateurs_connectes(Utilisateur* users, int socket_fd, char *pr
     printf("-----------------------------\n");
 }
 
+/**
+ * @brief Associe un utilisateur à une socket donnée lors de sa connexion.
+ * 
+ * @param users Tableau d'utilisateurs.
+ * @param socket_fd Descripteur de la socket de l'utilisateur.
+ * @param prenom Prénom de l'utilisateur.
+ * @param nom Nom de l'utilisateur.
+ */
 void associer_utilisateur_a_socket(Utilisateur* users, int socket_fd, char* prenom,  char* nom) {
     for (int i = 0; i < MAX_FDS; i++) {
         if (users[i].socket_fd == -1) {
@@ -112,6 +151,14 @@ void associer_utilisateur_a_socket(Utilisateur* users, int socket_fd, char* pren
     }
 }
 
+/**
+ * @brief Affiche la liste des salons connectés ainsi que leurs utilisateurs.
+ * 
+ * @param users Tableau d'utilisateurs.
+ * @param salons_name Tableau des noms de salons.
+ * @param salons_users Tableau des utilisateurs par salon.
+ * @param socket_fd Descripteur de la socket de l'utilisateur courant.
+ */
 void afficher_salons_connectes(Utilisateur* users, char **salons_name, char **salons_users, int socket_fd) {
     printf("\n--- Salons connectés ---\n");
 
@@ -147,6 +194,12 @@ void afficher_salons_connectes(Utilisateur* users, char **salons_name, char **sa
     printf("%s", notification);
 }
 
+/**
+ * @brief Envoie un message à un utilisateur spécifique.
+ * 
+ * @param users Tableau d'utilisateurs.
+ * @param user Utilisateur qui envoie le message.
+ */
 void envoyer_message_a_utilisateur(Utilisateur* users, Utilisateur* user) {
   int found = 0;
   char notification[BUFFER_SIZE];
@@ -167,6 +220,13 @@ void envoyer_message_a_utilisateur(Utilisateur* users, Utilisateur* user) {
   }
 }
 
+/**
+ * @brief Envoie un message à tous les utilisateurs sauf un.
+ * 
+ * @param users Tableau d'utilisateurs.
+ * @param except_socket_fd Descripteur de la socket à exclure de l'envoi.
+ * @param message Message à envoyer.
+ */
 void envoyer_message_a_tous_les_utilisateurs(Utilisateur* users, int except_socket_fd, char *message) {
   for (int i = 0; i < MAX_FDS; i++) {
     if (users[i].socket_fd != -1 && users[i].socket_fd != except_socket_fd) {
@@ -177,6 +237,13 @@ void envoyer_message_a_tous_les_utilisateurs(Utilisateur* users, int except_sock
   }
 }
 
+/**
+ * @brief Recherche un utilisateur dans le tableau par son prénom.
+ * 
+ * @param users Tableau d'utilisateurs.
+ * @param dest Prénom de l'utilisateur à rechercher.
+ * @return Retourne le descripteur de la socket de l'utilisateur ou `-1` s'il n'est pas trouvé.
+ */
 int find_client_by_name(Utilisateur* users,const char* dest) {
   for (int i = 0; i < MAX_FDS; i++) {
     if (strcmp(users[i].prenom, dest) == 0) {
@@ -186,6 +253,13 @@ int find_client_by_name(Utilisateur* users,const char* dest) {
   return -1;
 }
 
+/**
+ * @brief Fonction principale du serveur qui gère les connexions et les événements des clients.
+ * 
+ * @param argc Nombre d'arguments de la ligne de commande.
+ * @param argv Arguments de la ligne de commande.
+ * @return Retourne `0` en cas de succès.
+ */
 int main(int argc, char const *argv[]) {
     int welcome_fd = socket(AF_INET, SOCK_STREAM, 0);
     print_error(welcome_fd, "socket");
@@ -224,7 +298,6 @@ int main(int argc, char const *argv[]) {
     ///GESTION DES SALONS 
     char *salons_name[NB_SERVERS];
     char *salons_users[NB_SERVERS];
-    //int salons_index = -1;
     for (int i = 0; i < NB_SERVERS; i++) {
         salons_name[i] = NULL;
         salons_users[i] = NULL;
@@ -497,7 +570,6 @@ int main(int argc, char const *argv[]) {
                             utilisateur = strtok(NULL, ",");
                         }
 
-                        // Libérer la mémoire allouée pour la copie
                         free(users_copy);
                     } else {
                         printf("Le salon %s n'existe pas.\n", user.dest);

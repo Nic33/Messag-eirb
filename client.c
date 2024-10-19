@@ -1,5 +1,21 @@
 #include <aux.h>
 
+/**
+ * @brief Dans cette partie, l'interface utilisisateur qui comprend plusieurs fonctionnalités ont été implémentées.
+ * Il est possible de :
+ * - Quitter proprement la messagerie.
+ * - Obtenir la liste des utilisateurs connectés.
+ * - Obtenir la liste de salons ouverts et les utilisateurs qui sont actuellement connectés dessus.
+ * - Envoyer un fichier à un autre utilisateur.
+ * - Discuter avec un utilisateur.
+ * - Créer un salon.
+ * - Discuter dans un salon.
+ * 
+ * @param argc 
+ * @param argv 
+ * @return int 
+ */
+
 int main(int argc, char const *argv[]) {
 
     int client_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -27,15 +43,16 @@ int main(int argc, char const *argv[]) {
     user.message = malloc(BUFFER_SIZE * sizeof(char));
     user.dest = malloc(50 * sizeof(char));
 
-    // Variables interaction terminal
+    // Variables d'interaction avec le terminal
     char input[BUFFER_SIZE];
     int identification = 0;
 
+    // Variables d'interaction avec le terminal
     bool file_data = false;
     FILE *file = NULL;
 
     while (1) {
-        if(identification == 0){
+        if(identification == 0){ // Menu d'identification utilisateur
             printf("\nQuitter tapez 'exit'\n");
             printf("Identification tapez '1'\n");
             printf("Nouvel utilisateur tapez '2'\n");
@@ -212,7 +229,7 @@ int main(int argc, char const *argv[]) {
                 printf("Valeur non reconnue\n");
             }
         }
-        else if (identification == 1){
+        else if (identification == 1){ // Menu pour accéder aux différentes fonctionnalités 
 
             printf("\nQuitter tapez 'exit'\n");
             printf("Info utilisateurs tapez 'info'\n");
@@ -447,7 +464,7 @@ int main(int argc, char const *argv[]) {
                 printf("Valeur non reconnue\n");
             }
 
-        }else if(identification == 2){
+        }else if(identification == 2){ // Envoie / reception de message client -> client 
 
             int poll_count = poll(fds, 2, -1);
             if (poll_count > 0) {
@@ -504,7 +521,7 @@ int main(int argc, char const *argv[]) {
 
                 }
             }
-        }else if(identification == 3){
+        }else if(identification == 3){ // Envoie / reception de message dans un salon avec d'autres clients
 
             int poll_count = poll(fds, 2, -1);
             if (poll_count > 0) {
@@ -563,7 +580,7 @@ int main(int argc, char const *argv[]) {
 
                 }
             }
-        }else if(identification == 4){ // fichier
+        }else if(identification == 4){ // Envoie / reception de fichier
 
             int poll_count = poll(fds, 2, -1);
             if (poll_count > 0) {
@@ -664,7 +681,7 @@ int main(int argc, char const *argv[]) {
 
                         free(buffer);
 
-                    } else {
+                    } else { // Remplissage du fichier
 
                         int message_size;
 
